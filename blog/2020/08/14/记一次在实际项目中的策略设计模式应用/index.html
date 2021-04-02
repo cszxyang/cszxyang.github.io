@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       记一次在实际项目中的策略设计模式应用 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" 记一次在实际项目中的策略设计模式应用 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2020/08/14/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%9C%A8%E5%AE%9E%E9%99%85%E9%A1%B9%E7%9B%AE%E4%B8%AD%E7%9A%84%E7%AD%96%E7%95%A5%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E5%BA%94%E7%94%A8/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2020-08-14T08:50:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    <meta property="og:article:tag" content="设计模式" />
+    
+    <meta property="og:article:tag" content="Java" />
+    
+    <meta property="og:article:tag" content="策略模式" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/github-gist.css">
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_SVG"></script>
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2020/08/14/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%9C%A8%E5%AE%9E%E9%99%85%E9%A1%B9%E7%9B%AE%E4%B8%AD%E7%9A%84%E7%AD%96%E7%95%A5%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E5%BA%94%E7%94%A8/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">记一次在实际项目中的策略设计模式应用</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">记一次在实际项目中的策略设计模式应用</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">#设计模式</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/java/">#Java</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">#策略模式</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2020-08-14T08:50:24&#43;02:00">
+            2020/8/14
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文介绍策略设计模式及其应用实践。</p>
+<h4 id="写在前面">写在前面</h4>
+<p>最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 <code>longtext</code> 类型的字段 <code>extend_info</code> 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 <code>extend_info_cipher</code> 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：</p>
+<p><img src="https://golb.cc/images/dp/strategy/Snipaste_2020-08-25_21-44-36.png" alt="Snipaste_2020-06-13_05-54-24.png"></p>
+<p>可以发现经过从 Phase 0 到 Phase 3 这几个阶段的迭代后，原敏感数据明文列的操作逐步转移到密文列上去了。</p>
+<p>看到这个设计图，第一时间在我脑海里闪过的是策略设计模式，之前我在中提到软件工程设计中的开闭思想，尽管只有上述这四种策略，貌似在 “开” 这一层用处不大，但是从 “闭” 原则上来看，如果能做好封装，那么可以避免在每个表涉及的 DAO 层上进行策略判断和选择，这样能避免写很多重复的代码。另一方面， 我觉得如果能做好接口抽象，尽管暂时貌似 “开” 得不多，但哪天需要扩展时，也能很舒服顺手地兼容。</p>
+<p>直观上看来，对于上述需求，假设有 10 张表需要进行操作，那么从 Java EE 开发地角度来看，你需要在 DAO 的上一层中的每个读写表的操作类中都进行类似如下的策略的判断和选择，</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">someKindOfserviceMethod</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">// 获取到参数配置
+</span><span style="color:#75715e"></span>    ArgsConfig config <span style="color:#f92672">=</span> configService<span style="color:#f92672">.</span><span style="color:#a6e22e">getConfigCode</span><span style="color:#f92672">(</span>SECURITY_READ_WRITE_MODE<span style="color:#f92672">);</span>
+    <span style="color:#75715e">// 根据参数值获取到读写模式枚举
+</span><span style="color:#75715e"></span>   	ReadWriteMode readWriteMode <span style="color:#f92672">=</span> ReadWriteMode<span style="color:#f92672">.</span><span style="color:#a6e22e">getReadWriteMode</span><span style="color:#f92672">(</span>config<span style="color:#f92672">.</span><span style="color:#a6e22e">getCode</span><span style="color:#f92672">);</span>
+    <span style="color:#75715e">// 根据读写模式枚举进行不同的操作
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">switch</span> <span style="color:#f92672">(</span>readWriteMode<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">case</span> DEFAULT<span style="color:#f92672">:</span>
+            <span style="color:#75715e">// ....bla bla 一连串操作
+</span><span style="color:#75715e"></span>        <span style="color:#66d9ef">case</span> STAGE_ONE<span style="color:#f92672">:</span>
+            <span style="color:#75715e">// ....bla bla 一连串操作
+</span><span style="color:#75715e"></span>        <span style="color:#66d9ef">case</span> STAGE_TWO<span style="color:#f92672">:</span>
+            <span style="color:#75715e">// ....bla bla 一连串操作
+</span><span style="color:#75715e"></span>        <span style="color:#66d9ef">case</span> DEFAULTHREE<span style="color:#f92672">:</span>
+            <span style="color:#75715e">// ....bla bla 一连串操作
+</span><span style="color:#75715e"></span>        <span style="color:#66d9ef">default</span><span style="color:#f92672">:</span>
+            <span style="color:#75715e">// exception handding
+</span><span style="color:#75715e"></span>    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>试想一下，这才是一张数据表的读或者写操作，如果是 10 张呢？如果是 100 张呢？显然这样搞能把人搞傻了，那么怎么办呢，有什么偷懒又优雅的解决方案吗？一开始我的答案是自定义 MyBatis 拦截器，拦截涉及的相关表的 query 和 update 方法，然后再进行进一步的密码学操作，但是与同事讨论后发现这种方案有一点不容忽视，就是性能，因为就我们所知而言，Mybatis 采用责任链设计模式实现插件式的可扩展性，而且这些插件可以出现在几个不同的特定位置，但是我们更多考虑到的是 Mybatis 对操作请求的拦截是盲目的，系统中存在几百上千张表的查询与更新请求，如果为了几张表的操作，而将所有的信号都拦截下来再进行过滤，显得有些得不偿失。</p>
+<p>强大的 Mybatis 有没有这方面的考虑和解决方案呢？限于水平和眼界，暂时未知。但是为了不写重复代码，我决定尝试使用策略模式实现这个需求。下面通过一个简单的 Demo，记录一下自己的思考过程。</p>
+<h4 id="动手实践">动手实践</h4>
+<p>不急，先来看看 wikipedia 中对 <a href="https://en.wikipedia.org/wiki/Strategy_pattern">策略模式</a> 的介绍：</p>
+<blockquote>
+<p>In computer programming, the strategy pattern (also known as the policy pattern) is a behavioral software design pattern that enables selecting an algorithm at runtime. Instead of implementing a single algorithm directly, code receives run-time instructions as to which in a family of algorithms to use.</p>
+<p>Strategy lets the algorithm vary independently from clients that use it. Strategy is one of the patterns included in the influential book Design Patterns by Gamma et al. that popularized the concept of using design patterns to describe how to design flexible and reusable object-oriented software. Deferring the decision about which algorithm to use until runtime allows the calling code to be more flexible and reusable.</p>
+</blockquote>
+<p>大致说，策略模式是一个行为型的设计模式，通过它可以在运行时动态选定一种算法，而不是直接在代码中写死一种算法。将使用哪种算法的决定推迟到运行时，可以使调用代码更加灵活和可重用。</p>
+<p><img src="https://golb.cc/images/dp/strategy/Snipaste_2020-08-28_00-05-51.png" alt="Snipaste_2020-08-28_00-05-51.png"></p>
+<p>在上面的 UML 类图中，Context 类并没有直接实现算法。而是调用了 Strategy 接口的  algorithm 方法，这样使 Context 类独立于算法的实现方式。Strategy1 和 Strategy2 类实现了 Strategy 接口，在里面提供具体的对于 algorithm 的实现。</p>
+<p>在运行期，Context 对象将一个算法委托给不同的策略对象。首先，Context 对一个 Strategy1 对象调用  algorithm，该对象执行算法并将结果返回给 Context。然后，Context 更改其策略并对一个 Strategy2 对象调用 algorithm，该对象执行算法并将结果返回给 Context。</p>
+<p>根据策略模式，类的行为不应该被继承。相反，它们应该使用接口进行封装。这符合<code>开闭原则（open/closed）</code> 原则（OCP），该原则建议<strong>类应该对扩展开放，但对修改关闭。</strong></p>
+<p>以 car 类为例。汽车的两个可能功能是刹车和加速。不同的车实现由于加速和刹车行为因车模型不同而存在差异，一种常见的方法是在子类中实现这些行为。这种方法有明显的缺点：加速和刹车行为必须在每个新车型中声明。随着模型数量的增加，管理这些行为的工作将大大增加，并且需要在模型之间复制代码。此外，如果不研究每个模型中的代码，就不容易确定每个模型的最自然而不同于其他模型的行为。</p>
+<p>策略模式使用组合而不是继承。在策略模式中，行为被定义为单独的接口和实现这些接口的特定类。这样可以更好地解耦行为和使用行为的类。可以在不破坏使用它的类的情况下改变行为，并且类可以通过改变使用的特定实现在不需要任何显著的代码更改的情况下在行为之间切换。行为还可以在运行时和设计时更改。</p>
+<p>好了，话不多说，我们来看看怎么使用策略模式来实现需求功能。</p>
+<p>整体上我设计了如下图这样一个类结构，可以看到 <code>CipherStrategy</code> 是一个接口，定义了基础的方法，然后让子类去实现这些方法，这就是开闭原则的体现。</p>
+<p><img src="https://golb.cc/images/dp/strategy/Snipaste_2020-08-26_00-01-42.png" alt="Snipaste_2020-08-28_00-05-51.png"></p>
+<p>对于策略接口，由于第一二阶段都是双写，所以可以使用 Java 8 的可在接口写 deault 方法的特性，提供默认的双写实现，</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">interface</span> <span style="color:#a6e22e">CipherStrategy</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">/** 明文字段 **/</span>
+    String PLAINTEXT_FIELD <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;extendInfo&#34;</span><span style="color:#f92672">;</span>
+    <span style="color:#75715e">/** 密文字段 **/</span>
+    String CIPHER_FIELD <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;extendInfoCipher&#34;</span><span style="color:#f92672">;</span>
+
+    <span style="color:#66d9ef">default</span> <span style="color:#f92672">&lt;</span>D<span style="color:#f92672">&gt;</span> Field <span style="color:#a6e22e">getField</span><span style="color:#f92672">(</span>D data<span style="color:#f92672">,</span> String fieldName<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        Field field <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+            field <span style="color:#f92672">=</span> data<span style="color:#f92672">.</span><span style="color:#a6e22e">getClass</span><span style="color:#f92672">().</span><span style="color:#a6e22e">getDeclaredField</span><span style="color:#f92672">(</span>fieldName<span style="color:#f92672">);</span>
+            field<span style="color:#f92672">.</span><span style="color:#a6e22e">setAccessible</span><span style="color:#f92672">(</span><span style="color:#66d9ef">true</span><span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>NoSuchFieldException e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> field<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">default</span> <span style="color:#f92672">&lt;</span>D<span style="color:#f92672">&gt;</span> Integer <span style="color:#a6e22e">insert</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>D<span style="color:#f92672">,</span> Integer<span style="color:#f92672">&gt;</span> function<span style="color:#f92672">,</span> D data<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+            Field plaintextField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> PLAINTEXT_FIELD<span style="color:#f92672">);</span>
+            String plaintext <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>String<span style="color:#f92672">)</span>plaintextField<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>data<span style="color:#f92672">);</span>
+
+            Field cipherField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> CIPHER_FIELD<span style="color:#f92672">);</span>
+            cipherField<span style="color:#f92672">.</span><span style="color:#a6e22e">set</span><span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> CipherUtil<span style="color:#f92672">.</span><span style="color:#a6e22e">encrypt</span><span style="color:#f92672">(</span>plaintext<span style="color:#f92672">));</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>IllegalAccessException e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>data<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>对于阶段零采用默认的策略实现，不做额外的处理。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DefaultStrategy</span> <span style="color:#66d9ef">implements</span> CipherStrategy <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>D<span style="color:#f92672">&gt;</span> Integer <span style="color:#a6e22e">insert</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>D<span style="color:#f92672">,</span> Integer<span style="color:#f92672">&gt;</span> function<span style="color:#f92672">,</span> D data<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">return</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>data<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">return</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>param<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>对于阶段一，写数据使用接口提供的双写逻辑，读数据逻辑不做额外处理，即读明文列。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">StageOneStrategy</span> <span style="color:#66d9ef">implements</span> CipherStrategy <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">){</span>
+        <span style="color:#66d9ef">return</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>param<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>对于阶段二，写数据使用接口提供的双写逻辑，读数据需要读密文列进行解密设置到内存中的明文列再返回给上层调用。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">StageTwoStrategy</span> <span style="color:#66d9ef">implements</span> CipherStrategy <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> records <span style="color:#f92672">=</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>param<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>records <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> records<span style="color:#f92672">.</span><span style="color:#a6e22e">size</span><span style="color:#f92672">()</span> <span style="color:#f92672">&gt;</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            records<span style="color:#f92672">.</span><span style="color:#a6e22e">forEach</span><span style="color:#f92672">(</span>record <span style="color:#f92672">-&gt;</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+                    Field cipherField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>record<span style="color:#f92672">,</span> CIPHER_FIELD<span style="color:#f92672">);</span>
+                    String cipher <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>String<span style="color:#f92672">)</span>cipherField<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>record<span style="color:#f92672">);</span>
+                    String plaintext <span style="color:#f92672">=</span> CipherUtil<span style="color:#f92672">.</span><span style="color:#a6e22e">decrypt</span><span style="color:#f92672">(</span>cipher<span style="color:#f92672">);</span>
+                    Field plaintextField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>record<span style="color:#f92672">,</span> PLAINTEXT_FIELD<span style="color:#f92672">);</span>
+                    plaintextField<span style="color:#f92672">.</span><span style="color:#a6e22e">set</span><span style="color:#f92672">(</span>record<span style="color:#f92672">,</span> plaintext<span style="color:#f92672">);</span>
+                    System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;获取到密文: &#34;</span> <span style="color:#f92672">+</span> cipher <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; 解密得到: &#34;</span> <span style="color:#f92672">+</span> plaintext<span style="color:#f92672">);</span>
+                <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>IllegalAccessException e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                    e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+                <span style="color:#f92672">}</span>
+            <span style="color:#f92672">});</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> function<span style="color:#f92672">.</span><span style="color:#a6e22e">apply</span><span style="color:#f92672">(</span>param<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>对于阶段三，写数据需要先将明文列加密结果写到密文列，再将明文列所在行置空，读数据需要读密文列进行解密设置到内存中的明文列再返回给上层调用。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">StageThreeStrategy</span> <span style="color:#66d9ef">implements</span> CipherStrategy <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>D<span style="color:#f92672">&gt;</span> Integer <span style="color:#a6e22e">insert</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>D<span style="color:#f92672">,</span> Integer<span style="color:#f92672">&gt;</span> function<span style="color:#f92672">,</span> D data<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+            Field plaintextField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> PLAINTEXT_FIELD<span style="color:#f92672">);</span>
+            String plaintext <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>String<span style="color:#f92672">)</span>plaintextField<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>data<span style="color:#f92672">);</span>
+            String cipher <span style="color:#f92672">=</span> CipherUtil<span style="color:#f92672">.</span><span style="color:#a6e22e">encrypt</span><span style="color:#f92672">(</span>plaintext<span style="color:#f92672">);</span>
+
+            Field cipherField <span style="color:#f92672">=</span> getField<span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> CIPHER_FIELD<span style="color:#f92672">);</span>
+            cipherField<span style="color:#f92672">.</span><span style="color:#a6e22e">set</span><span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> cipher<span style="color:#f92672">);</span>
+            plaintextField<span style="color:#f92672">.</span><span style="color:#a6e22e">set</span><span style="color:#f92672">(</span>data<span style="color:#f92672">,</span> <span style="color:#e6db74">&#34;&#34;</span><span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>IllegalAccessException e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#75715e">//... 同 StageTwoStrategy
+</span><span style="color:#75715e"></span>    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>再看 Context 类，我们通过组合的方式，即持有各个策略对象的单例引用，然后再在运行期决定到底使用哪种策略，这里模拟的方式是通过将参数设置到数据库，然后在运行时读配置来进行选择。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Context</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">// 如果使用 Spring，可以一次性全注入进来
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">private</span> DefaultStrategy defaultStrategy <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> DefaultStrategy<span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">private</span> StageOneStrategy stageOneStrategy <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StageOneStrategy<span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">private</span> StageTwoStrategy stageTwoStrategy <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StageTwoStrategy<span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">private</span> StageThreeStrategy stageThreeStrategy <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StageThreeStrategy<span style="color:#f92672">();</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> G<span style="color:#f92672">&gt;</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">doSelect</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>P<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>G<span style="color:#f92672">&gt;&gt;</span> function<span style="color:#f92672">,</span> P param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        CipherStrategy cipherStrategy <span style="color:#f92672">=</span> getCipherStrategy<span style="color:#f92672">(</span>getConfigCode<span style="color:#f92672">());</span>
+        <span style="color:#66d9ef">return</span> Objects<span style="color:#f92672">.</span><span style="color:#a6e22e">nonNull</span><span style="color:#f92672">(</span>cipherStrategy<span style="color:#f92672">)</span> <span style="color:#f92672">?</span> cipherStrategy<span style="color:#f92672">.</span><span style="color:#a6e22e">select</span><span style="color:#f92672">(</span>function<span style="color:#f92672">,</span> param<span style="color:#f92672">)</span> <span style="color:#f92672">:</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#f92672">&lt;</span>D<span style="color:#f92672">&gt;</span> Integer <span style="color:#a6e22e">doInsert</span><span style="color:#f92672">(</span>Function<span style="color:#f92672">&lt;</span>D<span style="color:#f92672">,</span> Integer<span style="color:#f92672">&gt;</span> function<span style="color:#f92672">,</span> D data<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        CipherStrategy cipherStrategy <span style="color:#f92672">=</span> getCipherStrategy<span style="color:#f92672">(</span>getConfigCode<span style="color:#f92672">());</span>
+        <span style="color:#66d9ef">return</span> Objects<span style="color:#f92672">.</span><span style="color:#a6e22e">nonNull</span><span style="color:#f92672">(</span>cipherStrategy<span style="color:#f92672">)</span> <span style="color:#f92672">?</span> cipherStrategy<span style="color:#f92672">.</span><span style="color:#a6e22e">insert</span><span style="color:#f92672">(</span>function<span style="color:#f92672">,</span> data<span style="color:#f92672">)</span> <span style="color:#f92672">:</span> 0<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">private</span> CipherStrategy <span style="color:#a6e22e">getCipherStrategy</span><span style="color:#f92672">(</span>Byte code<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>Objects<span style="color:#f92672">.</span><span style="color:#a6e22e">nonNull</span><span style="color:#f92672">(</span>code<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">switch</span> <span style="color:#f92672">(</span>code<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+               <span style="color:#66d9ef">case</span> 0<span style="color:#f92672">:</span>
+                   <span style="color:#66d9ef">return</span> defaultStrategy<span style="color:#f92672">;</span>
+               <span style="color:#66d9ef">case</span> 1<span style="color:#f92672">:</span>
+                   <span style="color:#66d9ef">return</span> stageOneStrategy<span style="color:#f92672">;</span>
+               <span style="color:#66d9ef">case</span> 2<span style="color:#f92672">:</span>
+                   <span style="color:#66d9ef">return</span> stageTwoStrategy<span style="color:#f92672">;</span>
+               <span style="color:#66d9ef">case</span> 3<span style="color:#f92672">:</span>
+                   <span style="color:#66d9ef">return</span> stageThreeStrategy<span style="color:#f92672">;</span>
+               <span style="color:#66d9ef">default</span><span style="color:#f92672">:</span>
+                   <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> IllegalArgumentException<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;no such mode ==&gt; code: &#34;</span> <span style="color:#f92672">+</span> code<span style="color:#f92672">);</span>
+           <span style="color:#f92672">}</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>至于如何使用呢？如果你使用 Spring，可以将各个策略注册成 Service，然后再将 Context 组件化，然后在现需要用到的地方注入 Context 就可以了。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">StrategyPatternClient</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        Context context <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> Context<span style="color:#f92672">();</span>
+        OrderMapper orderMapper <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> OrderMapperImpl<span style="color:#f92672">();</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>context<span style="color:#f92672">.</span><span style="color:#a6e22e">doSelect</span><span style="color:#f92672">(</span>orderMapper<span style="color:#f92672">::</span>selectById<span style="color:#f92672">,</span> 1<span style="color:#f92672">));</span>
+        GoodsMapper goodsMapper <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> GoodsMapperImpl<span style="color:#f92672">();</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>context<span style="color:#f92672">.</span><span style="color:#a6e22e">doSelect</span><span style="color:#f92672">(</span>goodsMapper<span style="color:#f92672">::</span>selectById<span style="color:#f92672">,</span> 2<span style="color:#f92672">));</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>context<span style="color:#f92672">.</span><span style="color:#a6e22e">doInsert</span><span style="color:#f92672">(</span>orderMapper<span style="color:#f92672">::</span>insert<span style="color:#f92672">,</span> <span style="color:#66d9ef">new</span> Order<span style="color:#f92672">(</span>10<span style="color:#f92672">,</span> <span style="color:#e6db74">&#34;order10&#34;</span><span style="color:#f92672">)));</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>context<span style="color:#f92672">.</span><span style="color:#a6e22e">doSelect</span><span style="color:#f92672">(</span>orderMapper<span style="color:#f92672">::</span>selectById<span style="color:#f92672">,</span> 10<span style="color:#f92672">));</span>
+        context<span style="color:#f92672">.</span><span style="color:#a6e22e">checkoutMode</span><span style="color:#f92672">();</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>context<span style="color:#f92672">.</span><span style="color:#a6e22e">doSelect</span><span style="color:#f92672">(</span>orderMapper<span style="color:#f92672">::</span>selectById<span style="color:#f92672">,</span> 10<span style="color:#f92672">));</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>由于这个 Demo 重点用于展示整个思路，所以代码方面没有很严谨，看一眼运行结果便是了，整个实例的完整代码可以去 <a href="https://github.com/cszxyang/jStrategy">Github</a> 下载。</p>
+<p><img src="https://golb.cc/images/dp/strategy/Snipaste_2020-08-28_00-42-11.png" alt="Snipaste_2020-08-28_00-42-11.png"></p>
+<h4 id="总结">总结</h4>
+<p>通过使用策略模式，我将各个阶段的不同操作与实际调用处进行解耦分离，得益于泛型和 Java 8 的函数式编程，可以实现类型泛化以及将不同的调用通过变量的形式进行传递，这大大增强了接口设计的灵活性和可扩展性。</p>
+<p>老实说，写完这个有点开心，因为好久没有像这种思路顺畅地写一些好玩的代码了，或许是习惯寻常搬砖的代码了吧，也不知道这样下去我还能不能葆有对优雅代码的热情与追求，于我而言，现阶段的工作真的只是为了赚钱，有时候我会想，这世上有没一份我真的喜欢到爆，使我愿意为它熬夜，愿意为它主动迎接困难，而毫无怨言的工作呢？</p>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+      <span class="readmore-prev readmore-meta">PREV: <a href="https://golb.cc/blog/2020/08/29/%E8%B0%88%E6%91%84%E5%BD%B1/"><h4>谈摄影</h4></a></span>
+      
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2020/06/10/%E5%86%99%E7%BB%99%E9%BB%91%E5%AE%A2%E7%9A%84-java-%E7%BC%96%E8%AF%91%E5%99%A8%E4%B8%8D%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97/"><h4>写给黑客的 Java 编译器不完全指南</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+

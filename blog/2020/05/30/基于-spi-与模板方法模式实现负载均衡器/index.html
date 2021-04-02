@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       基于 SPI 与模板方法模式实现负载均衡器 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" 基于 SPI 与模板方法模式实现负载均衡器 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://cszxyang.github.io/blog/2020/05/30/%E5%9F%BA%E4%BA%8E-spi-%E4%B8%8E%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F%E5%AE%9E%E7%8E%B0%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%99%A8/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2020-05-30T09:50:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="java" />
+    
+    <meta property="og:article:tag" content="设计模式" />
+    
+    <meta property="og:article:tag" content="负载均衡" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://cszxyang.github.io/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://cszxyang.github.io/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://cszxyang.github.io/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://cszxyang.github.io/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://cszxyang.github.io/css/hugo.css" />
+
+    
+    <link rel="stylesheet" type="text/css" href="https://cszxyang.github.io/css/highlight.css">
+    
+    <link rel="stylesheet" type="text/css" href="https://cszxyang.github.io/css/github-gist.css">
+    
+    <script src="https://cszxyang.github.io/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+    
+    <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?f9fb67624cf50664ffaa649d5b5bba5c";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+    </script>
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://cszxyang.github.io/blog/2020/05/30/%E5%9F%BA%E4%BA%8E-spi-%E4%B8%8E%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F%E5%AE%9E%E7%8E%B0%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%99%A8/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://cszxyang.github.io/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://cszxyang.github.io/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://cszxyang.github.io/tags/java/">Java</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://cszxyang.github.io/tags/随笔/">随笔</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://cszxyang.github.io/tags/algorithm/">算法</a></li>
+        
+        <li class="nav-opened" role="presentation"><a href="https://cszxyang.github.io/tags/dev/">开发</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://cszxyang.github.io/tags/life/">生活</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">基于 SPI 与模板方法模式实现负载均衡器</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+    <a class="bloglogo" href="https://weibo.com/cszxyang" target="_blank">
+        <span class="icon-twitter" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+    <a class="bloglogo" href="https://www.linkedin.com/in/cszxyang" target="_blank">
+        <span class="icon-linkedin" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">基于 SPI 与模板方法模式实现负载均衡器</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://cszxyang.github.io/tags/java/">#java</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://cszxyang.github.io/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">#设计模式</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://cszxyang.github.io/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">#负载均衡</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2020-05-30T09:50:24&#43;02:00">
+            2020/5/30
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文介绍如何利用 SPI 和模板方法设计模式实现易扩展负载均衡组件。</p>
+<p>最近在看微博的 motan，其中使用到 SPI，所以需要把它单独拿出来研究，不过在此之前我想介绍怎么基于 SPI、模板方法设计模式及相关算法知识实现服务负载均衡，如果你看懂这个实例，那么你或许可以说自己略微了解什么是 SPI（吹牛皮）。</p>
+<h3 id="1-模板方法设计模式">1. 模板方法设计模式</h3>
+<p>先看 wikipedia 中对于 <a href="https://en.wikipedia.org/wiki/Template_method_pattern">Template method pattern</a> 的介绍。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/claasDia.jpg" alt="W3sDesign_Template_Method_Design_Pattern_UML.jpg"></p>
+<p>在上面的 UML 类图中，<code>Abstract Class</code> 中定义了一个叫做<code>doAbsolutely</code> 的方法，这个方法定义了行为的骨架，可以理解这是所谓的模板方法，它定义了这个功能的不变的部分，然后变化的部分（<code>PrimitiveOperation1</code> 、 <code>PrimitiveOperation2</code> 和 <code>doSomething</code>）定义成抽象方法让子类去实现。</p>
+<p>下面是用 <a href="https://en.wikipedia.org/wiki/Lepus3">LePUS3</a> 描述的模板方法设计模式图，</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Template_Method_pattern_in_LePUS3.gif" alt="Template_Method_pattern_in_LePUS3.gif"></p>
+<p>为什么设计这种模式呢？我觉得，对于上述的模板方法，它是一个置于父类的底层方法，子类的要有不同的实现，那么如果不用模板方法的，那么就需要将它设计成抽象方法，然后由子类提供的实现，但是有种情况，如果子类的实现中都有一个通用的处理，比如参数验证等，那么就会存在部分重复的代码，这代码看起来就很招人烦了。</p>
+<p>相比之下，使用模板方法，将通用的公共的不变的部分封装到父类中，并通过父类调用变化的抽象方法或者说钩子函数，钩子函数由不同的子类实现并返回结果。这过程想想都觉得很奇妙，举个可能不太生动的例子，如果你玩过索尼的残幅相机，那么可能听过 <code>A6</code> 系列，对于 <code>a6100</code>、<code>a6400</code>、<code>a6600</code> 等等，它们使用的很多零件和功能都是一样的，相同的 2400 万像素传感器，实时跟踪对焦部件以及大部分硬件等，这些可以理解是模板方法，可以作为一个模具之类的东西，不同的相机实现在自己实现不同功能，如快门速度，ISO、视频动态范围、电池等等，具体设计的时候不需要重造模具，只需要将变化的东西接进模具就行了。</p>
+<p><img src="https://cszxyang.github.io/images/camera/Snipaste_2020-06-09_22-30-03.png" alt="img"></p>
+<p>综上所述，该设计模式的优点有</p>
+<ul>
+<li>由于将相同的逻辑封装在父类中，提升了代码的复用性。</li>
+<li>由于将不同的代码放在子类中，子类通过提供实现扩展不同的行为，提升了扩展性。</li>
+<li>由于通过父类调用子类的实现才能实现整体的操作，实现了控制反转。</li>
+<li>软件设计 <a href="https://en.wikipedia.org/wiki/SOLID">SOLID</a> 原则中有一点是开闭原则，即认为 “软件体应该是对于扩展开放的，但是对于修改封闭的”。下面这段摘自 <a href="https://zhuanlan.zhihu.com/p/24269134">知乎文章</a>，意会一下不难理解模板方法设计模式是符合开闭原则的，父类闭合，子类开放。
+<ul>
+<li>对扩展开放。模块对扩展开放，就意味着需求变化时，可以对模块扩展，使其具有满足那些改变的新行为。换句话说，模块通过扩展的方式去应对需求的变化。</li>
+<li>对修改关闭。模块对修改关闭，表示当需求变化时，关闭对模块源代码的修改，当然这里的“关闭”应该是尽可能不修改的意思，也就是说，应该尽量在不修改源代码的基础上面扩展组件。</li>
+</ul>
+</li>
+</ul>
+<p>再说模板方法设计模式的缺点，主要是引入了抽象类，需要新增很多子类来提供不同的实现，类的个数及相应的维护成本、系统设计复杂度增加了。</p>
+<h3 id="2-负载均衡">2. 负载均衡</h3>
+<p>什么是负载均衡呢？大三时我找实习，面试腾讯的时候被问到 Linux 下怎么查看系统的平均负载，那时当即懵了，什么是平均负载呢？支吾了半天没答出来，很是尴尬。</p>
+<p>以 RPC 为例，负载均衡器主要处于客户端，客户端获取到服务列表后，通过负载均衡器选择具体访问的服务地址，从而将 RPC 请求报文转发到相应的服务器。</p>
+<p>谷歌了一圈之后，我总结到的负载均衡算法大概有下面这些：</p>
+<h4 id="round-robin">Round Robin</h4>
+<p>有时也叫 <code>Next in Loop</code>，采用轮询法，即设置一个轮，每次返回下一个服务节点，该方法比较简单，但是存在一些缺陷，比如如果两台服务器的硬件配置（CPU、RAM、磁盘等）不一样，但是在同一段时间内使用轮询处理相同的流量，这是不合理的，因为配置更好的服务器理应被分配更多的流量。 然而尽管两台服务器的处理能力不成比例，负载平衡器仍将平均分配请求，久而久之，性能较差的服务器可能因为过载而宕机，这就是所谓的热点问题。</p>
+<p>所以这种算法最适用于由具有相同规格的服务器组成的集群。<code>Netflix Ribbon</code> 默认的负载均衡实现就是这种算法，感兴趣可见 <a href="https://github.com/Netflix/ribbon/blob/e327877cb47a56b68c705a68698ab67ded481aef/ribbon-loadbalancer/src/main/java/com/netflix/loadbalancer/BaseLoadBalancer.java#L64">这里</a>。</p>
+<h4 id="weighted-round-robin">Weighted Round Robin</h4>
+<p>带权轮询，加权轮循机制与轮循机制相似，尽管将请求分配给节点的方式仍然是循环的，但是某些服务器在总流量中所占份额更大，如规格较高的节点将分配更多数量的请求。但负载均衡器怎么确定服务器的权值呢，权值又以一个怎么样的维度进行定义呢？事实上这些都需要自定义，你需要定义一套根据服务器某个性能指标计算权值，然后可以在设置负载均衡器时为每个节点分配“权重”。</p>
+<p>通常，你可以根据服务器实际 CPU 容量指定权重。 例如，如果服务器 1 的容量是服务器 2 的 5 倍，则可以为它分配 5 的权重，为服务器 2 分配 1 的权重。</p>
+<p>硬件性能（如 CPU 容量）并不是选择 <code>加权循环（WRR）算法</code> 的唯一基础。 有时当一台服务器正在运行一些重要的业务代码时，尽管它的硬件配置比较好，但是你或许会希望它不要处理太多的其他请求，以免过载从而影响重要的业务。</p>
+<h4 id="random">Random</h4>
+<p>顾名思义，该算法通过随机匹配客户端和服务器，即使用基础随机数生成器。 在负载均衡器收到大量请求的情况下，随机算法将能够将请求平均分配给节点。 因此，与 <code>Round Robin</code> 一样，对于由具有相似配置（CPU，RAM等）的节点组成的集群，随机算法就足够了。</p>
+<h4 id="least-connections">Least Connections</h4>
+<p>最少连接，在某些情况下，即使集群中的两台服务器具有完全相同的规格，一台服务器仍然可以比另一台服务器更快地过载。一种可能的原因是连接到服务器 2 的客户端保持的连接时间比连接到服务器 1 的客户端保持的时间长得多。这可能会导致服务器 2 中的当前总连接堆积，而服务器 1 中的总连接（客户端在较短时间内连接和断开连接）实际上将保持不变。 结果，服务器 2 的资源可以更快地用完。如果你熟悉 TCP 连接管理机制，会想到在 TCP 连接释放时需要经历一个 <code>TIME_WAIT</code> 阶段，当连接时间较长时的某个时刻，如果释放的处于 <code>TIME_WAIT</code> 阶段的连接堆积，则服务器可用的连接将变少。</p>
+<p>在这种情况下，最少连接算法会更合适。 该算法考虑了每个服务器具有的当前连接数。当客户端尝试连接时，负载平衡器将尝试确定哪个服务器的连接数最少，然后将新连接分配给该服务器。</p>
+<h4 id="weighted-least-connections">Weighted Least Connections</h4>
+<p>带权最少连接，加权最少连接算法对最少连接的作用类似于加权轮询对轮询的作用。 即它基于每个服务器的相应容量引入“权重”组件。 就像在加权循环中一样，你必须预先指定每个服务器的 “权重”。现在，要实现 “加权最少连接” 算法的负载平衡器会考虑两件事：每个服务器的权重/容量以及当前连接到每个服务器的客户端的当前数量。</p>
+<p>当然还有很多，比如说著名的一致性哈希算法、基于服务端流量监控的<code>Least traffic</code>，还有就是 <a href="http://www.danga.com/perlbal/">Perlbal</a> 中使用 HTTP OPTIONS 请求报文获取各个服务器的交互延迟，根据延迟大小决定选择选择哪个服务器。</p>
+<p>当然，不同的算法有着不同的特点，从而导致其应用场景也不同，以 RPC 为例，我之前想给 motan 添加一个 Least Connections 负载均衡器实现（<a href="https://github.com/weibocom/motan/issues/895">issue 传送门</a>），项目维护者给我以下的建议：</p>
+<blockquote>
+<ul>
+<li>RPC一般都是长链接，很多场景下服务端链接数不能很好的代表服务节点的压力；</li>
+<li>LB 算法要尽量简单，避免某些未知情况下导致线上流量不可控；</li>
+<li>复杂的流量策略，最好是由类似策略中心来统一控制。</li>
+</ul>
+</blockquote>
+<h3 id="3-负载均衡实现上">3. 负载均衡实现（上）</h3>
+<p>我们这里考虑 RPC 的应用场景，客户端动态代理在用户无察觉的情况下封装调用信息，在此过程中需要选择一个具体的服务节点进行报文转发，这时它会根据服务 URI 去注册中心查询对应的 IP 集合，</p>
+<ol>
+<li>然后判断这个集合是不是空的，若是则抛出异常之类的；</li>
+<li>否则再看该集合是不是只存在一个服务节点且节点处于可用的状态，是的话则将请求转发到该服务节点；</li>
+<li>如果服务节点不止一个，那么就再进一步根据某种负载均衡算法在服务列表中选择一个合适的节点进行转发。</li>
+</ol>
+<p>可以看到，上面这些步骤中，根据某种负载均衡算法进行服务选择的过程时可变的部分，而其他部分是不变的，显然可以使用上面介绍的模板方法模式进行设计。我们可以按以下的步骤来</p>
+<ol>
+<li>写一个 <code>LoadBalancer</code> 接口，其中定义接口方法 <code>select</code></li>
+<li>写一个 <code>BaseLoadBalancer</code> 的抽象类，在其中实现 <code>LoadBalancer</code> 的 <code>select</code> 方法，实现到上述的第三步的时候调用本类的抽象方法 <code>doSelect</code> 方法。</li>
+<li>再写几个 <code>BaseLoadBalancer</code> 的实现类，在<code>doSelect</code> 方法中实现具体的节点选择算法。</li>
+</ol>
+<p>上述各个类的关系如下类图所示：</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-05-29_10-14-18.png" alt="Snipaste_2020-05-29_10-14-18.png"></p>
+<p>为了 避免堆砌代码，我截了上面几个类的关键代码片段，想看完整的代码可以点 <a href="https://github.com/cszxyang/java-tutorial/tree/master/jdk-spi">这里</a>。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-06-05_12-05-09.png" alt="Snipaste_2020-06-05_12-05-09.png"></p>
+<p>ok，打完这一套之后，我们已经实现了符合开闭原则的 LB，那么怎么获取到这些 LB 对象呢？也许你会这样写</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">App</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> CustomException <span style="color:#f92672">{</span>
+        LoadBalancer loadBalancer <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> RandomLoadBalancer<span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> 0<span style="color:#f92672">;</span> i <span style="color:#f92672">&lt;</span> 100<span style="color:#f92672">;</span> i<span style="color:#f92672">++)</span> <span style="color:#f92672">{</span>
+            Server selectedServer <span style="color:#f92672">=</span> loadBalancer<span style="color:#f92672">.</span><span style="color:#a6e22e">select</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Request<span style="color:#f92672">());</span>
+            System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>selectedServer<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>但是如果某天使用随机的做法已经不符合系统的要求了，我需要换用 RR 了，那如何是好呢？有人说了，这不简单，直接在程序里改不就得了，将 <code>RandomLoadBalancer</code> 换成 <code>RoundRobinLoadBalancer</code>，反正面向接口编程不就是这样玩的吗？</p>
+<p>可以是可以，不过按我的理解来说，当你的程序成熟到一定程度时，上面这段代码（不一定这样写，主要是获取 LB 的方式）也应该符合开闭原则（当然前提是 <code>u r not coding shit</code>，这好像还不要紧，如果 <code>u r enjoying coding shit</code>，那当我没说）。</p>
+<h3 id="4-spi-介绍">4. SPI 介绍</h3>
+<p>英文全称为 <code>Service provider interface</code>，看到 wikipedia 中对它的介绍如下所示：</p>
+<blockquote>
+<p><strong>Service Provider Interface</strong> (<strong>SPI</strong>) is an API intended to be implemented or extended by a third party. It can be used to enable framework extension and replaceable components</p>
+</blockquote>
+<p>大意是，SPI 是一种 API 定义，可被第三方实现或扩展，常被用于框架中实现扩展插件或可替换的组件。在 JDK 中涉及的类主要是 <code>java.util.ClassLoader</code>，对此 <a href="https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html">Java 的官方文档</a> 中介绍到</p>
+<blockquote>
+<p>A service is a well-known set of interfaces and (usually abstract) classes. A service provider is a specific implementation of a service. The classes in a provider typically implement the interfaces and subclass the classes defined in the service itself. Service providers can be installed in an implementation of the Java platform in the form of extensions, that is, jar files placed into any of the usual extension directories. Providers can also be made available by adding them to the application&rsquo;s class path or by some other platform-specific means.</p>
+</blockquote>
+<p>需要搞清楚的几个概念</p>
+<ul>
+<li>service：一组接口或抽象类</li>
+<li>service provider：service 的具体实现，可以以 jar 包的形式安装到 Java 平台中。</li>
+</ul>
+<blockquote>
+<p>For the purpose of loading, a service is represented by a single type, that is, a single interface or abstract class. (A concrete class can be used, but this is not recommended.) A provider of a given service contains one or more concrete classes that extend this <em>service type</em> with data and code specific to the provider. The <em>provider class</em> is typically not the entire provider itself but rather a proxy which contains enough information to decide whether the provider is able to satisfy a particular request together with code that can create the actual provider on demand. The details of provider classes tend to be highly service-specific; no single class or interface could possibly unify them, so no such type is defined here. The only requirement enforced by this facility is that provider classes must have a zero-argument constructor so that they can be instantiated during loading.</p>
+</blockquote>
+<p>service 应该使用单一类型表示，即接口或抽象类（可以使用具体类，但不建议这样做）。一个 service 可以有很多 provider 实现，SPI 对于这些实现没有很多约束，只要它能满足特定的请求和实现一定的功能即可，唯一的硬性要求是它们里面必须要有一个无参构造函数，这样它们就可以在加载期间被实例化。</p>
+<blockquote>
+<p>A service provider is identified by placing a <em>provider-configuration file</em> in the resource directory <code>META-INF/services</code>. The file&rsquo;s name is the fully-qualified binary name of the service&rsquo;s type. The file contains a list of fully-qualified binary names of concrete provider classes, one per line. Space and tab characters surrounding each name, as well as blank lines, are ignored. The comment character is <code>'#'</code> (<code>'\u0023'</code>, NUMBER SIGN); on each line all characters following the first comment character are ignored. The file must be encoded in UTF-8.</p>
+</blockquote>
+<p>在实现 service provider 后，需要在资源目录 <code>META-INF/services</code> 中的一个以相应 service 命名的文件中写上它的全限定类名。这个文件中包含对应 service 的所有具体服务提供类的全限定类名，每个一行，每个名称周围的空格、制表符以及空白行将会在加载时被忽略。注释字符为<code>#'</code> (<code>\u0023</code>，有符号整数)。在每行中，第一个注释字符之后的所有字符都将被忽略。该文件必须用 UTF-8 编码。</p>
+<blockquote>
+<p>If a particular concrete provider class is named in more than one configuration file, or is named in the same configuration file more than once, then the duplicates are ignored. The configuration file naming a particular provider need not be in the same jar file or other distribution unit as the provider itself. The provider must be accessible from the same class loader that was initially queried to locate the configuration file; note that this is not necessarily the class loader from which the file was actually loaded.</p>
+</blockquote>
+<p>如果一个 service provider 在配置文件中出现了超过一次，则多余的将被忽略。命名特定 provider 的配置文件不能与 provider 本身在同一个 jar 文件中。provider 必须可以被最初查询以定位配置文件的同一个类加载器访问;，但注意，这并不必要是实际加载配置文件的类加载器（或许可以从双亲委派模型的角度解释）。</p>
+<blockquote>
+<p>Providers are located and instantiated lazily, that is, on demand. A service loader maintains a cache of the providers that have been loaded so far. Each invocation of the iterator method returns an iterator that first yields all of the elements of the cache, in instantiation order, and then lazily locates and instantiates any remaining providers, adding each one to the cache in turn. The cache can be cleared via the reload method.</p>
+<p>Service loaders always execute in the security context of the caller. Trusted system code should typically invoke the methods in this class, and the methods of the iterators which they return, from within a privileged security context.</p>
+<p>Instances of this class are not safe for use by multiple concurrent threads.</p>
+<p>Unless otherwise specified, passing a <code>null</code> argument to any method in this class will cause a NullPointerException to be thrown.</p>
+</blockquote>
+<p>provider 是按需懒定位和实例化的。service loader 会缓存加载过的 service，每次调用 iterator 方法都会返回一个迭代器，该迭代器首先按实例化顺序生成缓存的所有元素，然后惰性地定位和实例化剩余的不在缓存中的 provider，依次将每个 provider 添加到缓存中。可以通过 reload 方法清除缓存。</p>
+<p>service loader  总是在调用者的安全上下文中执行。受信任的系统代码通常应该从特权安全上下文中调用该类中的方法以及它们返回的迭代器的方法（见下文的 <code>ensureDriversInitialized</code> 中的<code>AccessController.doPrivileged</code>）。ServiceLoader 类的实例对于多个并发线程的使用是不安全的。</p>
+<h3 id="5-负载均衡实现下">5. 负载均衡实现（下）</h3>
+<p>下面使用静态工厂的方式提供 <code>LoadBalancer</code>，具体获取<code>LoadBalancer</code> 的工作交给 SPI，具体而言是 <code>ServiceLoader</code>。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">LoadBalancerfactory</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#a6e22e">LoadBalancerfactory</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> LoadBalancer <span style="color:#a6e22e">getLoadBalancer</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        ServiceLoader<span style="color:#f92672">&lt;</span>LoadBalancer<span style="color:#f92672">&gt;</span> loadBalancerList <span style="color:#f92672">=</span> ServiceLoader<span style="color:#f92672">.</span><span style="color:#a6e22e">load</span><span style="color:#f92672">(</span>LoadBalancer<span style="color:#f92672">.</span><span style="color:#a6e22e">class</span><span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">final</span> Optional<span style="color:#f92672">&lt;</span>LoadBalancer<span style="color:#f92672">&gt;</span> loadBalancer <span style="color:#f92672">=</span> StreamSupport<span style="color:#f92672">.</span><span style="color:#a6e22e">stream</span><span style="color:#f92672">(</span>loadBalancerList<span style="color:#f92672">.</span><span style="color:#a6e22e">spliterator</span><span style="color:#f92672">(),</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">)</span>
+                <span style="color:#f92672">.</span><span style="color:#a6e22e">findFirst</span><span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">return</span> loadBalancer<span style="color:#f92672">.</span><span style="color:#a6e22e">orElse</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>不过这样还不行，还需要注意在 <code>resources</code> 目录下创建 <code>META-INF/services</code> 目录，在里面创建一个以服务接口命名的文件。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-06-05_13-43-13.png" alt="Snipaste_2020-06-05_13-43-13.png"></p>
+<p>然后在里面写上具体的接口实现的全限定类名，虽然没有跟踪源码看 SPI 的加载过程，但我觉得不外乎是加载这个目录下的配置文件，然后根据实现类名，利用反射创建实现类对象。</p>
+<pre><code>com.cszxyang.jt.spi.cluster.loadbalance.RoundRobinLoadBalancer
+com.cszxyang.jt.spi.cluster.loadbalance.RandomLoadBalancer
+</code></pre><p>现在我们来写个简单的客户端调用测试一下，在此之前先在 <code>BaseLoadBalancer</code> 中初始化三个服务器信息。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">App</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> CustomException <span style="color:#f92672">{</span>
+        LoadBalancer loadBalancer <span style="color:#f92672">=</span> LoadBalancerfactory<span style="color:#f92672">.</span><span style="color:#a6e22e">getLoadBalancer</span><span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> 0<span style="color:#f92672">;</span> i <span style="color:#f92672">&lt;</span> 10<span style="color:#f92672">;</span> i<span style="color:#f92672">++)</span> <span style="color:#f92672">{</span>
+            Server select <span style="color:#f92672">=</span> loadBalancer<span style="color:#f92672">.</span><span style="color:#a6e22e">select</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Request<span style="color:#f92672">());</span>
+            System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>select<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">abstract</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">BaseLoadBalancer</span> <span style="color:#66d9ef">implements</span> LoadBalancer <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">protected</span> List<span style="color:#f92672">&lt;</span>Server<span style="color:#f92672">&gt;</span> serverList<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">BaseLoadBalancer</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        serverList <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> ArrayList<span style="color:#f92672">&lt;&gt;();</span>
+        serverList<span style="color:#f92672">.</span><span style="color:#a6e22e">add</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Server<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;127.0.0.1&#34;</span><span style="color:#f92672">,</span> 80<span style="color:#f92672">));</span>
+        serverList<span style="color:#f92672">.</span><span style="color:#a6e22e">add</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Server<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;127.0.0.1&#34;</span><span style="color:#f92672">,</span> 9090<span style="color:#f92672">));</span>
+        serverList<span style="color:#f92672">.</span><span style="color:#a6e22e">add</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Server<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;127.0.0.1&#34;</span><span style="color:#f92672">,</span> 443<span style="color:#f92672">));</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#75715e">//....
+</span><span style="color:#75715e"></span><span style="color:#f92672">}</span>
+</code></pre></div><p>可以看到 RR 的输出信息如下</p>
+<pre><code>Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=443)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=443)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=443)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=9090)
+</code></pre><p>现在我们改变<code>resources/META-INF/services</code> 中定义的实现顺序，让<code>RandomLoadBalancer</code> 排在第一个，然后得到的运行输出信息如下所示。</p>
+<pre><code>Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=443)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=443)
+Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=9090)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=80)
+Server(ip=127.0.0.1, port=80)
+</code></pre><h3 id="6-spi-扩展">6. SPI 扩展</h3>
+<p>看完 SPI 怎么应用之后，再来看看它的应用，首先在 JDBC 方面，我们先引入两个依赖。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#f92672">&lt;dependency&gt;</span>
+    <span style="color:#f92672">&lt;groupId&gt;</span>mysql<span style="color:#f92672">&lt;/groupId&gt;</span>
+    <span style="color:#f92672">&lt;artifactId&gt;</span>mysql-connector-java<span style="color:#f92672">&lt;/artifactId&gt;</span>
+    <span style="color:#f92672">&lt;version&gt;</span>5.1.45<span style="color:#f92672">&lt;/version&gt;</span>
+<span style="color:#f92672">&lt;/dependency&gt;</span>
+
+<span style="color:#f92672">&lt;dependency&gt;</span>
+    <span style="color:#f92672">&lt;groupId&gt;</span>postgresql<span style="color:#f92672">&lt;/groupId&gt;</span>
+    <span style="color:#f92672">&lt;artifactId&gt;</span>postgresql<span style="color:#f92672">&lt;/artifactId&gt;</span>
+    <span style="color:#f92672">&lt;version&gt;</span>9.1-901-1.jdbc4<span style="color:#f92672">&lt;/version&gt;</span>
+<span style="color:#f92672">&lt;/dependency&gt;</span>
+</code></pre></div><p>然后我们点开 IDEA 的 <code>External Libraries</code> 查看 jar 包源码，会发现在 <code>META-INF/services</code> 中有个叫做 <code>java.sql.Driver </code>的文件。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-06-05_15-40-24.png" alt="Snipaste_2020-06-05_15-40-24.png"></p>
+<p>看到 <code>mysql-connector-java:5.1.45</code> 中 <code>META-INF/services</code> 中指明两个provider。</p>
+<pre><code>com.mysql.jdbc.Driver
+com.mysql.fabric.jdbc.FabricMySQLDriver
+</code></pre><p>而 <code>postgresql:9.1-901-1.jdbc4</code> 的 <code>META-INF/services</code> 中只有一行内容</p>
+<pre><code>org.postgresql.Driver
+</code></pre><p>我们写个测试获取所有的驱动实现。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DriverFactory</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#a6e22e">DriverFactory</span><span style="color:#f92672">()</span> <span style="color:#f92672">{}</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> Driver <span style="color:#a6e22e">getDriver</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        ServiceLoader<span style="color:#f92672">&lt;</span>Driver<span style="color:#f92672">&gt;</span> loadBalancerList <span style="color:#f92672">=</span> ServiceLoader<span style="color:#f92672">.</span><span style="color:#a6e22e">load</span><span style="color:#f92672">(</span>Driver<span style="color:#f92672">.</span><span style="color:#a6e22e">class</span><span style="color:#f92672">);</span>
+        Stream<span style="color:#f92672">&lt;</span>Driver<span style="color:#f92672">&gt;</span> stream <span style="color:#f92672">=</span> StreamSupport<span style="color:#f92672">.</span><span style="color:#a6e22e">stream</span><span style="color:#f92672">(</span>loadBalancerList<span style="color:#f92672">.</span><span style="color:#a6e22e">spliterator</span><span style="color:#f92672">(),</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">);</span>
+        List<span style="color:#f92672">&lt;</span>Driver<span style="color:#f92672">&gt;</span> collect <span style="color:#f92672">=</span> stream<span style="color:#f92672">.</span><span style="color:#a6e22e">collect</span><span style="color:#f92672">(</span>Collectors<span style="color:#f92672">.</span><span style="color:#a6e22e">toList</span><span style="color:#f92672">());</span>
+        collect<span style="color:#f92672">.</span><span style="color:#a6e22e">forEach</span><span style="color:#f92672">(</span>System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">::</span>println<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">final</span> Optional<span style="color:#f92672">&lt;</span>Driver<span style="color:#f92672">&gt;</span> loadBalancer <span style="color:#f92672">=</span> stream<span style="color:#f92672">.</span><span style="color:#a6e22e">findFirst</span><span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">return</span> loadBalancer<span style="color:#f92672">.</span><span style="color:#a6e22e">orElse</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>然后简单n 调用</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DriverApp</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> CustomException <span style="color:#f92672">{</span>
+        Driver driver <span style="color:#f92672">=</span> DriverFactory<span style="color:#f92672">.</span><span style="color:#a6e22e">getDriver</span><span style="color:#f92672">();</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>看到打印的信息</p>
+<pre><code>com.mysql.jdbc.Driver@497470ed
+com.mysql.fabric.jdbc.FabricMySQLDriver@63c12fb0
+org.postgresql.Driver@b1a58a3
+</code></pre><p>在 JDBC 4.0 之前，请求连接之前需要使用反射来加载驱动实现，如对于 <code>MySQL</code>，需要这样写 <code>Class.forName(&quot;com.mysql.jdbc.Driver&quot;)</code>，但是我们在 <a href="https://docs.oracle.com/javadb/10.8.3.0/ref/rrefjdbc4_0summary.html">Oracle Doc</a> 中对 JDBC 4.0 和 JDBC 4.1 地介绍中知道， 自 JDBC 4.0 起能够自动加载 JDBC 驱动，不需要手动注册，在连接时 <code>DriverManager </code> 会找到合适的 JDBC 驱动。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-06-05_16-15-07.png" alt="Snipaste_2020-06-05_16-15-07.png"></p>
+<p><code>java.sql.DriverManager</code>  是 JDBC 用于注册和管理连接的工具类，下面引用所示的是 <a href="https://docs.oracle.com/javase/8/docs/api/java/sql/DriverManager.html">Oracle API Doc</a> 中对于它的介绍，关键点在于其中获取连接和驱动的方法在  JDBC 4.0 开始已经被 Service Provider 机制增强了，第三方的驱动实现只需要在 jar 包的资源目录下的  <code>META-INF/services/java.sql.Driver</code>. 文件中 定义，就能被自动加载进来。</p>
+<blockquote>
+<p>The <code>DriverManager</code> methods <code>getConnection</code> and <code>getDrivers</code> have been enhanced to support the Java Standard Edition [Service Provider](<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/jar/jar.html#Service">https://docs.oracle.com/javase/8/docs/technotes/guides/jar/jar.html#Service</a> Provider) mechanism. JDBC 4.0 Drivers must include the file <code>META-INF/services/java.sql.Driver</code>. This file contains the name of the JDBC drivers implementation of <code>java.sql.Driver</code>. For example, to load the <code>my.sql.Driver</code> class, the <code>META-INF/services/java.sql.Driver</code> file would contain the entry:</p>
+</blockquote>
+<p>那么具体是怎么实现的呢，我们可以点开 <code>java.sql.DriverManager</code>  的源码，直接搜 <code>ServiceLoader</code>，我们看到逻辑都在下面这个 <code>ensureDriversInitialized</code> 方法中。</p>
+<p><img src="https://cszxyang.github.io/images/java/jdk/spi/Snipaste_2020-06-05_16-26-34.png" alt="Snipaste_2020-06-05_16-26-34.png"></p>
+<p>可以看到其中使用 <code>ServiceLoader</code> 加载 classpath下以及 jar 包中所有的 <code>META-INF/services</code> 目录下的<code>java.sql.Driver</code> 文件，并找到具体的实现类的名字，然后创建 Class 对象，没有看到创建具体的 Provider 对象的逻辑，但是上面提到调用 <code>iterator</code> 方法会基于缓存选择性地创建对象，具体逻辑看 <code>iterator</code> 方法，在此不深究。</p>
+<h3 id="7-总结">7. 总结</h3>
+<p>上面这一套就是 motan 对于负载均衡器的实现，其他插件的实现也类似，不过相比之下，它封装得更深，估计是考虑到的问题更多，比如说对 SPI 的封装（涉及到 SpiData 注解）等。</p>
+<p>本文介绍了模板方法设计模式（特点、优缺点、应用场景等）、负载均衡的概念及常见的负载均衡算法、介绍 SPI 的概念和应用，同时在这些知识前提下实现了一个符合开闭原则的比较优雅的负载均衡器组件。</p>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://cszxyang.github.io/" style="background-image: url(https://cszxyang.github.io/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://cszxyang.github.io/about/"><h4>关于我</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+            
+            <script type="text/javascript">
+                var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+                document.write(unescape("%3Cspan id='cnzz_stat_icon_1000165127'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s22.cnzz.com/z_stat.php%3Fid%3D1000165127%26show%3Dpic1' type='text/javascript'%3E%3C/script%3E"));
+            </script>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://cszxyang.github.io/js/jquery.js"></script>
+    <script type="text/javascript" src="https://cszxyang.github.io/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://cszxyang.github.io/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+

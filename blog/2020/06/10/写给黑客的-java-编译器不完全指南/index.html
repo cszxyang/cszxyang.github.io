@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       写给黑客的 Java 编译器不完全指南 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" 写给黑客的 Java 编译器不完全指南 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2020/06/10/%E5%86%99%E7%BB%99%E9%BB%91%E5%AE%A2%E7%9A%84-java-%E7%BC%96%E8%AF%91%E5%99%A8%E4%B8%8D%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2020-06-10T08:50:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    <meta property="og:article:tag" content="java" />
+    
+    <meta property="og:article:tag" content="编译器" />
+    
+    <meta property="og:article:tag" content="AST分析" />
+    
+    <meta property="og:article:tag" content="APT" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/github-gist.css">
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_SVG"></script>
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2020/06/10/%E5%86%99%E7%BB%99%E9%BB%91%E5%AE%A2%E7%9A%84-java-%E7%BC%96%E8%AF%91%E5%99%A8%E4%B8%8D%E5%AE%8C%E5%85%A8%E6%8C%87%E5%8D%97/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">写给黑客的 Java 编译器不完全指南</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">写给黑客的 Java 编译器不完全指南</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/java/">#java</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">#编译器</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/ast%E5%88%86%E6%9E%90/">#AST分析</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/apt/">#APT</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2020-06-10T08:50:24&#43;02:00">
+            2020/6/10
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文介绍 JDK 中编译器相关的类库及其有趣的应用，包括 AST 分析和插件化注解处理等。</p>
+<p>BTW，这里的 “黑客” 指的是<a href="https://book.douban.com/subject/6021440/">《黑客与画家》</a>里描述的 “黑客”，大黑阔请绕道（手动狗头）。</p>
+<p>言归正传，我的毕业设计做的是一个在线集成开发环境，我给它取了个名字，叫 <code>olycode</code>，意思大概是<code>online coding</code>。截止目前，它支持在线运行 Java、Python 和 Lua 代码，该项目现在运行在我的服务器上，可以点 <a href="http://111.229.131.135:10010/">传送门 </a>过去玩玩，完整的工程代码也已经上传到了 Github，感兴趣的朋友可以点 <a href="https://github.com/cszxyang/olycode">这里</a> 去看看。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-13_05-54-24.png" alt="Snipaste_2020-06-13_05-54-24.png"></p>
+<p>首先说下为什么我要做这样的一个项目，主要有三点：</p>
+<ol>
+<li>
+<p>写腻了增删查改的管理系统</p>
+</li>
+<li>
+<p>身边的安全大佬写的是漏洞扫描器、安全狗之类的专业相关的犀利玩意，不过我玩不来，之前写过一个密码学相关的东西（<a href="https://github.com/cszxyang/cipher4j">Github传送门</a>），做的是教学演示之类的，能够输出每一步的比特或字节位在加解密子过程中的变化，虽然算法那块都是我自己基于源文档实现的，但是总觉得要把教学效果做好对界面设计的要求很高，那岂不是我的毕设工作都集中在前端的代码上了？显然这不是我想要。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/rsa-gui.png" alt="rsa-gui.png"></p>
+</li>
+<li>
+<p>一个 CS 菜鸡的编译器情结：如果你看过<a href="https://book.douban.com/subject/25884108/">《程序员的呐喊》</a>这本书，会发现作者 Steve Yegge 花了一部分篇幅去介绍编译原理方面知识的重要性，并且在最后下了这么一个定义：“编译原理是计算机科学第二重要的课程。” 看到这里你或许会说，切，才第二，不过第一重要的课程是什么呢？答案居然是 Typing，这直接让我对这本书的豆瓣评分加了一颗星。</p>
+<p><strong>有时候我在想，不管是前端、后台还是客户端，在工作中很多时候都是在用别人的工具拧螺丝。我总感觉 CS 的知识浩如烟海，自己就像一个迷失在海边的小人，很多时候都在为捡到被海浪冲上岸的贝壳而满心雀跃，却不知深海底下有什么样迷人的风光和发生着什么样光怪陆离的故事。</strong></p>
+<p>所以还是准备能在学校的期间做点有意思的事情（当然如果能做喜欢的工作的话，那该有多幸福），而说到能与编译原理沾边的又具备一定实用价值的东西，我第一个想到的就是在线 IDE。</p>
+<p>在此啰嗦多几句，在编译原理的学科中有三本不得不提的书，龙虎鲸三兄弟，我去年年底买了虎书打算折腾一下的，结果遇上疫情，现在它已经在学校宿舍吃了几个月灰。</p>
+<ul>
+<li>龙书：Alfred V.Aho / Ravi Sethi / Jeffrey D.Ullman / Monica S. Lam 的<a href="https://book.douban.com/subject/1866231/">《Compilers: Principles, Techniques, and Tools》</a></li>
+<li>虎书：Andrew W.Appel / Jens Palsberg 的<a href="https://book.douban.com/subject/30191414/">《Modern Compiler Implementation in C》</a></li>
+<li>鲸书：Steven S.Muchnick 的<a href="https://book.douban.com/subject/1400374/">《Advanced Compiler Design and Implementation》</a></li>
+</ul>
+</li>
+</ol>
+<p>接下来简单介绍下这个项目是怎么做的，Python 部分使用的是三方库 <a href="https://www.jython.org/">jython</a> 实现，纯粹是调 API，非常简单。Lua 部分则是基于 Lua 官方文档及张秀宏的 <a href="https://book.douban.com/subject/30348061/">《自己动手实现 Lua - 虚拟机、编译器和标准库》</a> 一书中实现的小编译器及虚拟机实现的，虽然用 C 语言写的 Lua 比较短小精悍，但这部分的复杂度和工作量还是比较大的，在此不展开详述。</p>
+<p>Java 部分也比较有趣，由于 <code>olycode</code> 是用 Java 写的，所以我干脆使用 JDK 的 tools.jar 中提供的 javac 工具进行源码编译，虽然曾经想过重造轮子写个 Java 虚拟机，事实上张秀宏的 <a href="https://book.douban.com/subject/26802084/">《自己动手写Java虚拟机》</a> 一书中也已经手把手教人写个小 VM 了，但是想想整了半天最后只能写出个打印 hello world 的玩具，其实用性方面还是过于欠缺，而且光有 VM 还不行，之前下过 OpenJDK 的源码，瞄了一眼 javac（事实上 javac 是用 Java 写的，这让我很惊讶），其代码规模实在让我望而却步。另外，既然已经动手实现 Lua，就毕业工程设计层面来看，其研究价值和工作量已经够了，不如直接用类库，保证 Java 语言的在线编程需要的完整的语法都能被用到。</p>
+<p>点开 <code>tools.jar</code> 的源码，可以看到在 tools 目录下有很多子目录，里面还提供了 <code>javap</code>、<code>javah</code> 等工具，今天主要聊聊比较有意思的 <code>javac</code>。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-11_14-40-27.png" alt="Snipaste_2020-06-11_14-40-27.png"></p>
+<h3 id="java-compiler-api">Java Compiler API</h3>
+<p>Java Compiler API 最早在 1998 年提出的  <a href="https://jcp.org/en/jsr/detail?id=199">JSR 199: Java<!-- raw HTML omitted -->TM<!-- raw HTML omitted --> Compiler API</a> 需求文档中定义，通过它我们可大致了解这个开放的 API 中 Java Compiler 的一些特性：</p>
+<ul>
+<li>基于 NIO 进行扩展出一套抽象的文件系统，允许用户从传统文件系统、jar 包或内存读取源代码。</li>
+<li>支持以结构化数据的形式从编译器返回诊断信息。</li>
+</ul>
+<p>再看为什么需要设计这套编译器 API：</p>
+<ul>
+<li>JSP 代码最终需要编译成字节码，此过程需要将依赖编译器支持，如果能实现运行时编译，将可以避免使用另开进程的方式生成字节码。</li>
+<li>IDE 开发者希望能够方便地处理用户编写的源代码。</li>
+</ul>
+<p>在 2006 年，Java SE 6.0 发布，代号 <code>Mustang（野马）</code>，相关的代码随之问世。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-11_14-55-53.png" alt="Snipaste_2020-06-11_14-55-53.png"></p>
+<p>说白了，这套东西就是为了能在运行时实现 Java 代码的动态编译，除此之外，<code>javac</code> 包下还有 AST 分析相关的 Tree API 和编译期注解处理相关的 APT API，后续将一一介绍。</p>
+<p>Java Compiler API 定义在 <code>rt.jar</code> 中，既然说是 API ，自然先看绿色标记的接口，主要提供几个接口：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_11-50-20.png" alt="Snipaste_2020-06-12_11-50-20.png"></p>
+<p><a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/JavaCompiler.html"><code>JavaCompiler</code></a>：Java 编译器的抽象表示，可通过 <code>JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();</code> 获取到接口实现实例，不过这一句可能会抛异常，之前我把 <code>olycode</code> 打包丢到自己的服务器上，通过命令行执行<code>java -jar olycode.jar</code>，然后就吃了下面这个异常，定位到编译器类的第 63 行刚好就是这句。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-13_08-49-48.png" alt="Snipaste_2020-06-13_08-49-48.png"></p>
+<p>经验证明需要检查在自己的 PATH 路径下是否有 <code>tools.jar</code> 这个包，实在不行的话就将切换到 JDK 目录下再执行 <code>java </code>命令。如果想省事的话，直接 Maven 依赖的方式引入也无妨，不过看网上有人说不同的操作系统中的 systemPath 可能会有些出入，具体我没比较过，读者知悉。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#f92672">&lt;dependency&gt;</span>
+    <span style="color:#f92672">&lt;groupId&gt;</span>com.sun<span style="color:#f92672">&lt;/groupId&gt;</span>
+    <span style="color:#f92672">&lt;artifactId&gt;</span>tools<span style="color:#f92672">&lt;/artifactId&gt;</span>
+    <span style="color:#f92672">&lt;version&gt;</span>1.8<span style="color:#f92672">&lt;/version&gt;</span>
+    <span style="color:#f92672">&lt;scope&gt;</span>system<span style="color:#f92672">&lt;/scope&gt;</span>
+    <span style="color:#f92672">&lt;systemPath&gt;</span>${java.home}/../lib/tools.jar<span style="color:#f92672">&lt;/systemPath&gt;</span>
+<span style="color:#f92672">&lt;/dependency&gt;</span>
+</code></pre></div><p><code>JavaCompiler</code> 依赖于两个服务：诊断监听器（diagnostics listener）和文件管理器（file manager）。</p>
+<p>编译器可能在编译期间生成诊断信息（diagnostics，例如，错误消息）。如果提供了诊断监听器（diagnostics listener），则将向监听器提供诊断信息。如果没有提供监听器，除非另有规定，不然诊断信息将以未指定的格式格式化并写入到默认输出对象中去，即 <code>System.err</code>。即使提供了诊断监听器，一些诊断信息未必适合写入 <code>Diagnostic</code> 对象中，这些信息最终还是会写入默认的输出。</p>
+<p>每个编译器实例有一个相关联的标准文件管理器（standard file manager），它是该编译器工具内置的文件管理器。可通过调用 <code>StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null);</code> 获得。</p>
+<p>在这个包中有许多用来简化 SPI 的实现和定制编译器行为的类和接口，下面展开介绍：</p>
+<p><a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/StandardJavaFileManager.html"><code>StandardJavaFileManager</code></a>：每个实现这个接口的编译器都提供了一个标准的文件管理器来操作常规文件。<code>StandardJavaFileManager</code> 接口定义了从常规文件创建文件对象的方法。</p>
+<p>标准文件管理有两个作用：</p>
+<ul>
+<li>用于定制编译器如何读写文件的构造块</li>
+<li>支持在多个编译任务之间共享文件</li>
+</ul>
+<p>可通过重用文件管理器的方式来减少扫描文件系统和读取 jar 包的开销。尽管可能没有减少开销，一个标准的文件管理器必须与多个序列化的编译任务一起工作，如下面的代码片段所示，其中 <code>compilationUnits2</code> 重用 <code>fileManager</code> 以是的能够用上缓存。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Files<span style="color:#f92672">[]</span> files1 <span style="color:#f92672">=</span> <span style="color:#f92672">...</span> <span style="color:#f92672">;</span> <span style="color:#75715e">// input for first compilation task
+</span><span style="color:#75715e"></span>Files<span style="color:#f92672">[]</span> files2 <span style="color:#f92672">=</span> <span style="color:#f92672">...</span> <span style="color:#f92672">;</span> <span style="color:#75715e">// input for second compilation task
+</span><span style="color:#75715e"></span>
+JavaCompiler compiler <span style="color:#f92672">=</span> ToolProvider<span style="color:#f92672">.</span><span style="color:#a6e22e">getSystemJavaCompiler</span><span style="color:#f92672">();</span>
+StandardJavaFileManager fileManager <span style="color:#f92672">=</span> compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getStandardFileManager</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+
+Iterable<span style="color:#f92672">&lt;?</span> <span style="color:#66d9ef">extends</span> JavaFileObject<span style="color:#f92672">&gt;</span> compilationUnits1 <span style="color:#f92672">=</span>
+    fileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">getJavaFileObjectsFromFiles</span><span style="color:#f92672">(</span>Arrays<span style="color:#f92672">.</span><span style="color:#a6e22e">asList</span><span style="color:#f92672">(</span>files1<span style="color:#f92672">));</span>
+compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getTask</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> fileManager<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> compilationUnits1<span style="color:#f92672">).</span><span style="color:#a6e22e">call</span><span style="color:#f92672">();</span>
+
+Iterable<span style="color:#f92672">&lt;?</span> <span style="color:#66d9ef">extends</span> JavaFileObject<span style="color:#f92672">&gt;</span> compilationUnits2 <span style="color:#f92672">=</span>
+    fileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">getJavaFileObjects</span><span style="color:#f92672">(</span>files2<span style="color:#f92672">);</span> <span style="color:#75715e">// use alternative method
+</span><span style="color:#75715e">// reuse the same file manager to allow caching of jar files
+</span><span style="color:#75715e"></span>compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getTask</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> fileManager<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> compilationUnits2<span style="color:#f92672">).</span><span style="color:#a6e22e">call</span><span style="color:#f92672">();</span>
+fileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">close</span><span style="color:#f92672">();</span>
+</code></pre></div><p><a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/DiagnosticCollector.html"><code>DiagnosticCollector</code></a>：用于收集诊断信息，实例代码如下所示：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Iterable<span style="color:#f92672">&lt;?</span> <span style="color:#66d9ef">extends</span> JavaFileObject<span style="color:#f92672">&gt;</span> compilationUnits <span style="color:#f92672">=</span> <span style="color:#f92672">...;</span>
+JavaCompiler compiler <span style="color:#f92672">=</span> ToolProvider<span style="color:#f92672">.</span><span style="color:#a6e22e">getSystemJavaCompiler</span><span style="color:#f92672">();</span>
+DiagnosticCollector<span style="color:#f92672">&lt;</span>JavaFileObject<span style="color:#f92672">&gt;</span> diagnostics <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> DiagnosticCollector<span style="color:#f92672">&lt;</span>JavaFileObject<span style="color:#f92672">&gt;();</span>
+StandardJavaFileManager fileManager <span style="color:#f92672">=</span> compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getStandardFileManager</span><span style="color:#f92672">(</span>diagnostics<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getTask</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> fileManager<span style="color:#f92672">,</span> diagnostics<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> compilationUnits<span style="color:#f92672">).</span><span style="color:#a6e22e">call</span><span style="color:#f92672">();</span>
+
+<span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span>Diagnostic diagnostic <span style="color:#f92672">:</span> diagnostics<span style="color:#f92672">.</span><span style="color:#a6e22e">getDiagnostics</span><span style="color:#f92672">())</span>
+    System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">format</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;Error on line %d in %d%n&#34;</span><span style="color:#f92672">,</span>
+                      diagnostic<span style="color:#f92672">.</span><span style="color:#a6e22e">getLineNumber</span><span style="color:#f92672">()</span>
+                      diagnostic<span style="color:#f92672">.</span><span style="color:#a6e22e">getSource</span><span style="color:#f92672">().</span><span style="color:#a6e22e">toUri</span><span style="color:#f92672">());</span>
+fileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">close</span><span style="color:#f92672">();</span>
+</code></pre></div><p><a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/ForwardingJavaFileManager.html"><code>ForwardingJavaFileManager</code></a>, <a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/ForwardingFileObject.html"><code>ForwardingFileObject</code></a>, 和 <a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/ForwardingJavaFileObject.html"><code>ForwardingJavaFileObject</code></a>：子类化不能用于覆盖标准文件管理器（standard file manager）的行为，因为标准文件管理器是通过调用编译器上的 <code>getStandardFileManager</code>方法而不是通过调用文件管理器的构造函数创建的。所以应该使用委托（delegation）的方式，将标准文件管理器对象作为参数进行传递以在其基础上扩展自定义的文件管理器的行为。例如，考虑如何在调用<code>JavaFileManager.flush()</code>时将所有调用记录下来，代码实现如下所示：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">final</span> Logger logger <span style="color:#f92672">=</span> <span style="color:#f92672">...;</span>
+Iterable<span style="color:#f92672">&lt;?</span> <span style="color:#66d9ef">extends</span> JavaFileObject<span style="color:#f92672">&gt;</span> compilationUnits <span style="color:#f92672">=</span> <span style="color:#f92672">...;</span>
+JavaCompiler compiler <span style="color:#f92672">=</span> ToolProvider<span style="color:#f92672">.</span><span style="color:#a6e22e">getSystemJavaCompiler</span><span style="color:#f92672">();</span>
+StandardJavaFileManager stdFileManager <span style="color:#f92672">=</span> compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getStandardFileManager</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+JavaFileManager fileManager <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> ForwardingJavaFileManager<span style="color:#f92672">(</span>stdFileManager<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">flush</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        logger<span style="color:#f92672">.</span><span style="color:#a6e22e">entering</span><span style="color:#f92672">(</span>StandardJavaFileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">class</span><span style="color:#f92672">.</span><span style="color:#a6e22e">getName</span><span style="color:#f92672">(),</span> <span style="color:#e6db74">&#34;flush&#34;</span><span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">flush</span><span style="color:#f92672">();</span>
+        logger<span style="color:#f92672">.</span><span style="color:#a6e22e">exiting</span><span style="color:#f92672">(</span>StandardJavaFileManager<span style="color:#f92672">.</span><span style="color:#a6e22e">class</span><span style="color:#f92672">.</span><span style="color:#a6e22e">getName</span><span style="color:#f92672">(),</span> <span style="color:#e6db74">&#34;flush&#34;</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">};</span>
+compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getTask</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> fileManager<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> compilationUnits<span style="color:#f92672">).</span><span style="color:#a6e22e">call</span><span style="color:#f92672">();</span>
+</code></pre></div><p><a href="https://docs.oracle.com/javase/6/docs/api/javax/tools/SimpleJavaFileObject.html"><code>SimpleJavaFileObject</code></a>：这个类提供了一个基本的文件对象实现，我们可以继承并扩展其行为并在此基础上创建文件对象。简单理解就是，在这一套编译系统中，文件管理器仅对能识别的文件对象进行操作，为此我们的源码需要使用规范的形式表示，例如对于一串字符串源码，可以丢进一个 jar 包中，然后再叫文件管理器去读取这个 jar 包；可以将源码丢到内存区域中，然后叫文件管理器去相应的内存取数据，不管源码以什么的形式存在，只要对其的操作行为能够被文件系统认可就行。例如，下面介绍如何定义一个包裹字符串形式源码的文件对象：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#75715e">/**
+</span><span style="color:#75715e">* A file object used to represent source coming from a string.
+</span><span style="color:#75715e">*/</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">JavaSourceFromString</span> <span style="color:#66d9ef">extends</span> SimpleJavaFileObject <span style="color:#f92672">{</span>
+    <span style="color:#75715e">/**
+</span><span style="color:#75715e">     * The source code of this &#34;file&#34;.
+</span><span style="color:#75715e">     */</span>
+    <span style="color:#66d9ef">final</span> String code<span style="color:#f92672">;</span>
+    <span style="color:#75715e">/**
+</span><span style="color:#75715e">     * Constructs a new JavaSourceFromString.
+</span><span style="color:#75715e">     * @param name the name of the compilation unit represented by this file object
+</span><span style="color:#75715e">     * @param code the source code for the compilation unit represented by this file object
+</span><span style="color:#75715e">     */</span>
+    JavaSourceFromString<span style="color:#f92672">(</span>String name<span style="color:#f92672">,</span> String code<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">(</span>URI<span style="color:#f92672">.</span><span style="color:#a6e22e">create</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;string:///&#34;</span> <span style="color:#f92672">+</span> name<span style="color:#f92672">.</span><span style="color:#a6e22e">replace</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#39;.&#39;</span><span style="color:#f92672">,</span><span style="color:#e6db74">&#39;/&#39;</span><span style="color:#f92672">)</span> <span style="color:#f92672">+</span> Kind<span style="color:#f92672">.</span><span style="color:#a6e22e">SOURCE</span><span style="color:#f92672">.</span><span style="color:#a6e22e">extension</span><span style="color:#f92672">),</span> Kind<span style="color:#f92672">.</span><span style="color:#a6e22e">SOURCE</span><span style="color:#f92672">);</span>
+            <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">code</span> <span style="color:#f92672">=</span> code<span style="color:#f92672">;</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#a6e22e">@Override</span>
+        <span style="color:#66d9ef">public</span> CharSequence <span style="color:#a6e22e">getCharContent</span><span style="color:#f92672">(</span><span style="color:#66d9ef">boolean</span> ignoreEncodingErrors<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">return</span> code<span style="color:#f92672">;</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>看完这一套之后我们可以进行源码的编译了</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> CompileResult <span style="color:#a6e22e">compile</span><span style="color:#f92672">(</span>String source<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    CompileResult compileResult <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CompileResult<span style="color:#f92672">();</span>
+    String className <span style="color:#f92672">=</span> getClassName<span style="color:#f92672">(</span>source<span style="color:#f92672">,</span> CLASS_PATTERN<span style="color:#f92672">);</span>
+    <span style="color:#75715e">// 把源码字符串构造成JavaFileObject，供编译使用
+</span><span style="color:#75715e"></span>    JavaFileObject sourceJavaFileObject <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StringSourceJavaFileObject<span style="color:#f92672">(</span>className<span style="color:#f92672">,</span> source<span style="color:#f92672">);</span>
+
+    Boolean compileSuccess <span style="color:#f92672">=</span> compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">getTask</span><span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> javaFileManager<span style="color:#f92672">,</span> diagnosticCollector<span style="color:#f92672">,</span>
+                                              options<span style="color:#f92672">,</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> Collections<span style="color:#f92672">.</span><span style="color:#a6e22e">singletonList</span><span style="color:#f92672">(</span>sourceJavaFileObject<span style="color:#f92672">)).</span><span style="color:#a6e22e">call</span><span style="color:#f92672">();</span>
+
+    compileResult<span style="color:#f92672">.</span><span style="color:#a6e22e">setSuccess</span><span style="color:#f92672">(</span>compileSuccess<span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(!</span>compileSuccess<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        compileResult<span style="color:#f92672">.</span><span style="color:#a6e22e">setDiagnostics</span><span style="color:#f92672">(</span>diagnosticCollector<span style="color:#f92672">.</span><span style="color:#a6e22e">getDiagnostics</span><span style="color:#f92672">());</span>
+        diagnosticCollector<span style="color:#f92672">.</span><span style="color:#a6e22e">clearDiagnostics</span><span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">return</span> compileResult<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    JavaFileObject bytesJavaFileObject <span style="color:#f92672">=</span> fileObjectMap<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>className<span style="color:#f92672">);</span>
+    compileResult<span style="color:#f92672">.</span><span style="color:#a6e22e">setBytes</span><span style="color:#f92672">(((</span>StringSourceJavaFileObject<span style="color:#f92672">)</span> bytesJavaFileObject<span style="color:#f92672">).</span><span style="color:#a6e22e">getCompiledBytes</span><span style="color:#f92672">());</span>
+    <span style="color:#66d9ef">return</span> compileResult<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>其中 <code>CompileResult</code> 是我自己定义的一个编译结果包裹类，<code>getClassName</code>方法中使用了正则表达式识别源代码的类的名字，然后组装成一个 <code>&lt;String, JavaFileObject&gt; </code> 形式的键值对丢到一个哈希表里面缓存起来，为了保证并发安全，这里使用了 <code>ConcurrentHashMap</code>，并且在自定义的文件管理器中定义写入编译结果的行为。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">JavaFileManagerImpl</span> <span style="color:#66d9ef">extends</span> ForwardingJavaFileManager<span style="color:#f92672">&lt;</span>JavaFileManager<span style="color:#f92672">&gt;</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">protected</span> <span style="color:#a6e22e">JavaFileManagerImpl</span><span style="color:#f92672">(</span>JavaFileManager fileManager<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">(</span>fileManager<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> JavaFileObject <span style="color:#a6e22e">getJavaFileForInput</span><span style="color:#f92672">(</span>Location location<span style="color:#f92672">,</span> String className<span style="color:#f92672">,</span> JavaFileObject<span style="color:#f92672">.</span><span style="color:#a6e22e">Kind</span> kind<span style="color:#f92672">)</span> 
+        <span style="color:#66d9ef">throws</span> IOException <span style="color:#f92672">{</span>
+        JavaFileObject javaFileObject <span style="color:#f92672">=</span> fileObjectMap<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>className<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>javaFileObject <span style="color:#f92672">==</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">getJavaFileForInput</span><span style="color:#f92672">(</span>location<span style="color:#f92672">,</span> className<span style="color:#f92672">,</span> kind<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> javaFileObject<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> JavaFileObject <span style="color:#a6e22e">getJavaFileForOutput</span><span style="color:#f92672">(</span>Location location<span style="color:#f92672">,</span> String className<span style="color:#f92672">,</span> 
+                                               JavaFileObject<span style="color:#f92672">.</span><span style="color:#a6e22e">Kind</span> kind<span style="color:#f92672">,</span> FileObject sibling<span style="color:#f92672">)</span> 
+        <span style="color:#66d9ef">throws</span> IOException <span style="color:#f92672">{</span>
+        JavaFileObject javaFileObject <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StringSourceJavaFileObject<span style="color:#f92672">(</span>className<span style="color:#f92672">,</span> kind<span style="color:#f92672">);</span>
+        fileObjectMap<span style="color:#f92672">.</span><span style="color:#a6e22e">put</span><span style="color:#f92672">(</span>className<span style="color:#f92672">,</span> javaFileObject<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> javaFileObject<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>打完这一套之后，我们可以写个测试程序编译一段字符串源码看看：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#f92672">import</span> com.github.cszxyang.jt.javac.compiler.CompileResult<span style="color:#f92672">;</span>
+<span style="color:#f92672">import</span> com.github.cszxyang.jt.javac.compiler.Compiler<span style="color:#f92672">;</span>
+<span style="color:#f92672">import</span> com.github.cszxyang.jt.javac.compiler.StringSourceCompiler<span style="color:#f92672">;</span>
+
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">App</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        String codeStr <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;public class Example {\n&#34;</span> <span style="color:#f92672">+</span>
+                <span style="color:#e6db74">&#34;    public static void main(String[] args) {\n&#34;</span> <span style="color:#f92672">+</span>
+                <span style="color:#e6db74">&#34;        System.out.println(\&#34;Hello Java Compiler\&#34;);\n&#34;</span> <span style="color:#f92672">+</span>
+                <span style="color:#e6db74">&#34;    }\n&#34;</span> <span style="color:#f92672">+</span>
+                <span style="color:#e6db74">&#34;}&#34;</span><span style="color:#f92672">;</span>
+        Compiler compiler <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> StringSourceCompiler<span style="color:#f92672">();</span>
+        CompileResult compileResult <span style="color:#f92672">=</span> compiler<span style="color:#f92672">.</span><span style="color:#a6e22e">compile</span><span style="color:#f92672">(</span>codeStr<span style="color:#f92672">);</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span>compileResult<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>运行后可以看到输出如下所示：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">CompileResult<span style="color:#f92672">{</span>isSuccess<span style="color:#f92672">=</span><span style="color:#66d9ef">true</span><span style="color:#f92672">,</span> bytes<span style="color:#f92672">=[-</span>54<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>2<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>70<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>66<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 52<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 34<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 6<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 20<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 21<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 22<span style="color:#f92672">,</span> 8<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 23<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 24<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 25<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 26<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 27<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 6<span style="color:#f92672">,</span> 60<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 62<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 3<span style="color:#f92672">,</span> 40<span style="color:#f92672">,</span> 41<span style="color:#f92672">,</span> 86<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> 67<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 100<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 15<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 78<span style="color:#f92672">,</span> 117<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 98<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 84<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 98<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 18<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 99<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 86<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 98<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 84<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 98<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 104<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 115<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 69<span style="color:#f92672">,</span> 120<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 112<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 59<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 22<span style="color:#f92672">,</span> 40<span style="color:#f92672">,</span> 91<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 59<span style="color:#f92672">,</span> 41<span style="color:#f92672">,</span> 86<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 115<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 19<span style="color:#f92672">,</span> 91<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 59<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 117<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 99<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 70<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 69<span style="color:#f92672">,</span> 120<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 112<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 46<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 8<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 28<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 29<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 30<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 19<span style="color:#f92672">,</span> 72<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 32<span style="color:#f92672">,</span> 74<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 32<span style="color:#f92672">,</span> 67<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 112<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 31<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 32<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 33<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 69<span style="color:#f92672">,</span> 120<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 112<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 16<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 79<span style="color:#f92672">,</span> 98<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 99<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 16<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 121<span style="color:#f92672">,</span> 115<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 3<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 117<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 21<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 80<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 59<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 19<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 111<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 80<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 101<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 109<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 112<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 21<span style="color:#f92672">,</span> 40<span style="color:#f92672">,</span> 76<span style="color:#f92672">,</span> 106<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 118<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 108<span style="color:#f92672">,</span> 97<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 83<span style="color:#f92672">,</span> 116<span style="color:#f92672">,</span> 114<span style="color:#f92672">,</span> 105<span style="color:#f92672">,</span> 110<span style="color:#f92672">,</span> 103<span style="color:#f92672">,</span> 59<span style="color:#f92672">,</span> 41<span style="color:#f92672">,</span> 86<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 33<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 5<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 6<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 7<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 8<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 47<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 5<span style="color:#f92672">,</span> 42<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>73<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>79<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 6<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 11<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 5<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 13<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 14<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 15<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 55<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>78<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 18<span style="color:#f92672">,</span> 3<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>74<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> <span style="color:#f92672">-</span>79<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 10<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 3<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 8<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 4<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 11<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 12<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 9<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 16<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 17<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 1<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 18<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 2<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> 19<span style="color:#f92672">],</span> diagnostics<span style="color:#f92672">=</span><span style="color:#66d9ef">null</span><span style="color:#f92672">}</span>
+</code></pre></div><p>这不就是我们亲切的字节码嘛，那要怎么才能看到最终的执行结果呢？我们可以通过类加载的方式，将字节码加载进 JVM 内存成为一个 Class 对象，然后再通过反射调用 Example 类中的 main 方法。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">CustomClassLoader</span> <span style="color:#66d9ef">extends</span> ClassLoader <span style="color:#f92672">{</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">CustomClassLoader</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">(</span>CustomClassLoader<span style="color:#f92672">.</span><span style="color:#a6e22e">class</span><span style="color:#f92672">.</span><span style="color:#a6e22e">getClassLoader</span><span style="color:#f92672">());</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> Class <span style="color:#a6e22e">loadBytes</span><span style="color:#f92672">(</span><span style="color:#66d9ef">byte</span><span style="color:#f92672">[]</span> classBytes<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">return</span> defineClass<span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">,</span> classBytes<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> classBytes<span style="color:#f92672">.</span><span style="color:#a6e22e">length</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>然后我们进行反射调用，可以看到在控制台打印了我们想要的信息：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_16-00-24.png" alt="Snipaste_2020-06-12_16-00-24.png"></p>
+<p>不过在 <code>olycode</code> 中我这里做得复杂一些，先通过修改字节码将常量池中的字面量 <code>java/lang/System</code> 和 <code>java/util/Scanner</code> 分别替换为我定义的 <code>com/github/cszxyang/olycode/java/proxy/ProxySystem</code> 和  <code>com/github/cszxyang/olycode/java/proxy/ProxyScanner</code>，为什么需要这样做呢？</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_16-02-15.png" alt="Snipaste_2020-06-12_16-02-15.png"></p>
+<p>我使用别人的在线 IDE 时，经常需要打印一些东西，对于 Java 程序，自然用的最多的就是调<code>System.out.println</code>方法了，但是点开其源码，你会发现：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_16-04-20.png" alt="Snipaste_2020-06-12_16-04-20.png"></p>
+<p>没错，用了 synchronized 锁住当前的 <code>System.out</code> 对象，设想如果以后一不小心我的小<code>olycode</code>火起来了，用户量噌噌噌地上去了，那么假如并发量很大的话，这里将会成为一个性能瓶颈，尽管 <a href="https://book.douban.com/subject/26591326/">《Java并发编程的艺术》</a> 中提到 JDK 1.6 后对锁做了一些优化，如锁消除、锁粗化、轻量级锁和偏向锁等，但且抛开优化失效的情况，我认为如果同步等待队列很长的话，还是难顶，所以干脆将<code>java/lang/System</code> 和 <code>java/util/Scanner</code> 拷出来魔改，以<code>java/lang/System</code> 为例，将其中的 <code>PrintStream</code> 类似的 out 对象改成自定义的 <code>ThreadLocalPrintStream</code> ，其中使用 <code>ThreadLocal</code> 包裹一个 <code>java.io.ByteArrayOutputStream</code> 对象，通过 <code>ThreadLocal</code> 为每条线程维护私有的输出对象，这样就能避免多线程同步等待的性能问题啦，具体的逻辑不在这里展开了，感兴趣的朋友可以去看看 <code>olycode</code> 的源码。</p>
+<h3 id="ast-分析"><code>AST</code> 分析</h3>
+<p>在写 <code>olycode</code> 之前，我去玩了很多别人写的在线 IDE，玩的时候突然升起一股恶趣味，如果我写个死循环它会怎么样呢？结果就是，有些 IDE 还真的被玩坏了的感觉，n 小时过去了，下图右侧的小圈圈还在转&hellip;&hellip;（/溜了）</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_16-50-55.png" alt="Snipaste_2020-06-12_16-50-55.png"></p>
+<p>那这个问题怎么解决呢，之前跟奇凯和贤杰交流了一下，翻翻聊天记录还在，贴出来看看：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-12_17-43-40.png" alt="Snipaste_2020-06-12_17-43-40.png"></p>
+<p>因为 ASM 的 API 实在不好理解（说到底还是懒，看哪天去翻译文档学习一下），所以后面我使用了基于线程池的异步方式执行客户端的代码，再在某个时间阈值后获取执行的结果，如果没拿到，那么就抛出一个超时异常。</p>
+<p>后来我又发现了一个很好玩的方式，既然想到使用 ASM，无非只是想要以一种无侵入的对用户透明的方式在源码中插入几条超时判断语句罢了，而在代码执行的过程中需要经历很多过程从而对应很多不同的状态，比如说先经过编译的过程，字符串形式的源码经过词法分析变成 Token 流， Token 流经过语法分析变成抽象语法树，再经过代码生成得到字节码，而 ASM 操纵的是编译得到的字节码，那么如果不在编译后修改源码，其实我们不妨在编译期搞一下事情。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/proc.png" alt="proc.png"></p>
+<p>具体在哪一步做呢？由于语法分析得到的抽象语法树去掉了注释和空行等，使得代码处于一种比较简洁的状态，操作起来比较简单，而且巧合的是说到 AST 分析，<code>tools.jar</code> 也提供了相应的 API，下面我们就来看看具体要怎么操作。</p>
+<h4 id="compiler-tree-api">Compiler Tree API</h4>
+<p><code>compiler Tree API</code> 使用<a href="https://en.wikipedia.org/wiki/Visitor_pattern">访问者模式</a>访问节点，这个模式的基本思想如下：首先我们拥有一个由许多对象构成的对象结构（比如一棵语法树，其中有很多节点元素），这些对象的类都拥有一个 accept 方法用来接受访问者对象；访问者是一个接口，它拥有一个 visit 方法，这个方法对访问到的对象结构中不同类型的元素作出不同的反应；在对象结构的一次访问过程中，我们遍历整个对象结构，对每一个元素都实施 accept 方法，在每一个元素的 accept 方法中回调访问者的 visit 方法，从而使访问者得以处理对象结构的每一个元素。我们可以针对对象结构设计不同的访问者类来完成不同的操作。按照我的理解，访问者模式实现了数据和操作的分离。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-16_10-39-21.png" alt="Snipaste_2020-06-16_10-39-21.png"></p>
+<p>Compiler Tree API 的接口文档在<a href="https://docs.oracle.com/javase/7/docs/jdk/api/javac/tree/com/sun/source/tree/package-summary.html">这里</a>，可以看到 AST 相关的类结构，</p>
+<p><img src="https://golb.cc/images/java/jdk/javac//Tree.png" alt="Tree.png"></p>
+<p>对应的 visitor 接口<code>TreeVisitor</code>与 AST 形成了标准的访问者模式，其中主要的 visitor 有三种：</p>
+<ul>
+<li><code>SimpleTreeVisitor</code>：当访问一个分支节点时默认不会 “往下” 继续遍历它的所有子节点。</li>
+<li><code>TreeScanner</code>：默认会遍历所有节点的子节点，在遍历当前节点的同时可以获取到上一个被访问的邻接兄弟节点的访问结果。</li>
+<li><code>TreePathScanner</code>：继承自<code>TreeScanner</code>，在遍历当前节点的同时除了可以获取到上一个被访问的邻接兄弟节点的访问结果外，还能获取到父节点的访问结果。</li>
+</ul>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-16_11-33-01.png" alt="Snipaste_2020-06-16_11-33-01.png"></p>
+<p>下面我们看看怎么通过 Compiler Tree API 分析及动态操纵 AST，以死循环代码的检测为例：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">EndlessLoopChecker</span> <span style="color:#66d9ef">extends</span> TreePathScanner<span style="color:#f92672">&lt;</span>Void<span style="color:#f92672">,</span> Void<span style="color:#f92672">&gt;</span> <span style="color:#f92672">{</span>
+
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> Trees         trees<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> TreeMaker     maker<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> JavacElements elements<span style="color:#f92672">;</span>
+    <span style="color:#75715e">/** 超时时间阈值，超过则抛异常 **/</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">int</span>           timeLimit<span style="color:#f92672">;</span>
+    <span style="color:#75715e">/** 线程安全的简单序列产生器 **/</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> SeqGen        pointSeq<span style="color:#f92672">;</span>
+    <span style="color:#75715e">/** 当前编译的源文件类名 **/</span>
+    <span style="color:#66d9ef">private</span> String              clsName<span style="color:#f92672">;</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">EndlessLoopChecker</span><span style="color:#f92672">(</span>Trees trees<span style="color:#f92672">,</span> TreeMaker maker<span style="color:#f92672">,</span> JavacElements elements<span style="color:#f92672">,</span> <span style="color:#66d9ef">int</span> timeLimit<span style="color:#f92672">){</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">trees</span> <span style="color:#f92672">=</span> trees<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">maker</span> <span style="color:#f92672">=</span> maker<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">elements</span> <span style="color:#f92672">=</span> elements<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">timeLimit</span> <span style="color:#f92672">=</span> timeLimit<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">pointSeq</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> SeqGen<span style="color:#f92672">(</span>0<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> Void <span style="color:#a6e22e">visitClass</span><span style="color:#f92672">(</span>ClassTree node<span style="color:#f92672">,</span> Void p<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>Objects<span style="color:#f92672">.</span><span style="color:#a6e22e">isNull</span><span style="color:#f92672">(</span><span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">clsName</span><span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">clsName</span> <span style="color:#f92672">=</span> node<span style="color:#f92672">.</span><span style="color:#a6e22e">getSimpleName</span><span style="color:#f92672">().</span><span style="color:#a6e22e">toString</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">visitClass</span><span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> p<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#75715e">// .....
+</span><span style="color:#75715e"></span><span style="color:#f92672">}</span>
+</code></pre></div><p>Java 中的循环有 4 种，分别是简单的 for 循环、增强 for 循环、while 和 do-while，各自分别对应的节点类型是<code>ForLoopTree</code>、<code>EnhancedForLoopTree</code>、<code>DoWhileLoopTree</code>和<code>WhileLoopTree</code>。通过下面代码见到，我对它们的处理都是一样的，</p>
+<ul>
+<li>先调用 <code>super.visitXXLoop</code> 以确保转换也应用于节点的子节点（嵌套循环）。</li>
+<li>执行实际的转换，其逻辑封装在<code>manipulateNode(node)</code>方法中。</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">EndlessLoopChecker</span> <span style="color:#66d9ef">extends</span> TreePathScanner<span style="color:#f92672">&lt;</span>Void<span style="color:#f92672">,</span> Void<span style="color:#f92672">&gt;</span> <span style="color:#f92672">{</span>
+     <span style="color:#75715e">// .....
+</span><span style="color:#75715e"></span>    
+	<span style="color:#66d9ef">public</span> Void <span style="color:#a6e22e">visitForLoop</span><span style="color:#f92672">(</span>ForLoopTree node<span style="color:#f92672">,</span> Void param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">visitForLoop</span><span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> param<span style="color:#f92672">);</span>
+        manipulateNode<span style="color:#f92672">(</span>node<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> Void <span style="color:#a6e22e">visitEnhancedForLoop</span><span style="color:#f92672">(</span>EnhancedForLoopTree node<span style="color:#f92672">,</span> Void param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">visitEnhancedForLoop</span><span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> param<span style="color:#f92672">);</span>
+        manipulateNode<span style="color:#f92672">(</span>node<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> Void <span style="color:#a6e22e">visitDoWhileLoop</span><span style="color:#f92672">(</span>DoWhileLoopTree node<span style="color:#f92672">,</span> Void param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">visitDoWhileLoop</span><span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> param<span style="color:#f92672">);</span>
+        manipulateNode<span style="color:#f92672">(</span>node<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">public</span> Void <span style="color:#a6e22e">visitWhileLoop</span><span style="color:#f92672">(</span>WhileLoopTree node<span style="color:#f92672">,</span> Void param<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">super</span><span style="color:#f92672">.</span><span style="color:#a6e22e">visitWhileLoop</span><span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> param<span style="color:#f92672">);</span>
+        manipulateNode<span style="color:#f92672">(</span>node<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>我们再看<code>manipulateNode(node)</code>方法：其中主要经过三个步骤</p>
+<ol>
+<li>生成时间声明语句节点</li>
+<li>在本循环之前，挂上起始时间声明</li>
+<li>在本循环之内，最后一条语句后，挂上超时判断</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">private</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">manipulateNode</span><span style="color:#f92672">(</span>Tree node<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    String timeDeclName <span style="color:#f92672">=</span> genTimeDeclName<span style="color:#f92672">();</span>
+    hookBefore<span style="color:#f92672">(</span><span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">getCurrentPath</span><span style="color:#f92672">().</span><span style="color:#a6e22e">getParentPath</span><span style="color:#f92672">().</span><span style="color:#a6e22e">getLeaf</span><span style="color:#f92672">(),</span> node<span style="color:#f92672">,</span> genTimeDecl<span style="color:#f92672">(</span>timeDeclName<span style="color:#f92672">));</span>
+    appendAsLastChild<span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> genTimeCheck<span style="color:#f92672">(</span>timeDeclName<span style="color:#f92672">,</span> node<span style="color:#f92672">));</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>假设有这么一段代码</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">while</span> <span style="color:#f92672">(</span>b <span style="color:#f92672">!=</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>a <span style="color:#f92672">&gt;</span> b<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        a <span style="color:#f92672">=</span> a <span style="color:#f92672">-</span> b<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span> <span style="color:#66d9ef">else</span> <span style="color:#f92672">{</span>
+        b <span style="color:#f92672">=</span> b <span style="color:#f92672">-</span>a<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">return</span> a<span style="color:#f92672">;</span>
+</code></pre></div><p>则其抽象语法树表示大致如下图所示</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_21-04-21.png" alt="Snipaste_2020-06-17_21-04-21.png"></p>
+<p>经过上述过程后生成的代码如下所示：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">long</span> start <span style="color:#f92672">=</span> System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">();</span>
+<span style="color:#66d9ef">while</span> <span style="color:#f92672">(</span>b <span style="color:#f92672">!=</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>a <span style="color:#f92672">&gt;</span> b<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        a <span style="color:#f92672">=</span> a <span style="color:#f92672">-</span> b<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span> <span style="color:#66d9ef">else</span> <span style="color:#f92672">{</span>
+        b <span style="color:#f92672">=</span> b <span style="color:#f92672">-</span>a<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">long</span> end <span style="color:#f92672">=</span> System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>end <span style="color:#f92672">-</span> start <span style="color:#f92672">&gt;</span> TIME_THRESHOLD<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> RuntimeException<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;Loop Time Exceeded&#34;</span><span style="color:#f92672">)</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">return</span> a<span style="color:#f92672">;</span>
+</code></pre></div><p>则经过修改的语法树对应如下所示：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_21-15-40.png" alt="Snipaste_2020-06-17_21-15-40.png"></p>
+<p>上述操作过程的代码如下所示，其中<code>hookBefore </code>用于将 <code>toBeInserted</code> 插入到<code>current</code>节点之前，<code>appendAsLastChild</code> 用于将<code>toBeInserted</code>插入到<code>node</code>的最后一个<code>child</code>的位置。</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_21-42-55.png" alt="Snipaste_2020-06-17_21-42-55.png"></p>
+<h4 id="插件化注解处理">插件化注解处理</h4>
+<p>有了上面定义的对抽象语法树的访问器之后，我们需要解决另一个问题是，要怎么样才能使得访问器生效呢？答案是使用 jdk1.6 的 Pluggable Annotation Processing 机制（<a href="https://jcp.org/en/jsr/detail?id=269">相关 JSR 链接</a>），在编译器获取编译任务的时候设置对应的<code>Processor</code>。</p>
+<p>Java 5 中引入了注解，作为在源代码中附加元信息的一种方式，但是注解的作用范围不包括编译期。Java 6 通过 JSR 269 提供可插入注释处理 API，将注解提升到了下一个级别。 JSR 269 使用插件机制扩展了 Java 编译器。使用这个 JSR，现在可以编写可插入到编译过程中的定制注释处理程序。</p>
+<p>注解处理按轮进行。在每一轮中，可能会要求处理器处理前一轮生成的源文件或字节码文件中发现的注解子集。所述第一轮加工的输入是插件化注解处理器工作的初始输入，这些初始输入可以看作是一个虚拟的第零轮处理的输出。如果一个处理器被要求在一个给定的轮中进行处理，那么它将被要求在随后的轮中进行处理，包括最后一轮，即使它没有需要处理的注解。</p>
+<p>为了编写一个注释处理程序，我们从 <code>AbstractProcessor</code> 派生出子类，并用 <code>SupportedAnnotationTypes</code> 和 <code>SupportedSourceVersion</code> 注释我们的子类。子类必须重写两个方法：</p>
+<ul>
+<li><code>public synchronized void init(ProcessingEnvironment processingEnv) </code></li>
+<li><code>public boolean process(Set annotations, RoundEnvironment roundEnv)</code></li>
+</ul>
+<p>Java 编译器在注释传递期间调用这两个方法。第一个方法被调用一次来初始化插件，后一个方法在每个注释轮中被调用，在所有轮完成后再调用一次，并在每轮中都会用于处理来自前一轮的类型元素上的一组注解类型，并返回处理程序是否声明这些注解。如果返回 true，则声明注解，随后的处理器将不会被要求处理它们；如果返回 false，则没有声明注解，可能会要求后续处理器处理它们。</p>
+<p>限于篇幅，不详细展开介绍，下面快速介绍我们定义的注解处理器：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_21-52-13.png" alt="Snipaste_2020-06-17_21-52-13.png"></p>
+<ul>
+<li><code>SupportedAnnotationTypes</code> 中写为&quot;*&quot;，表示作用于所有的类，不管有没有加上注解。</li>
+<li><code>SupportedSourceVersion</code> 设置了受支持的源代码版本。</li>
+<li>覆盖了<code>init</code>方法，初始化上下文和相关组件。</li>
+<li>覆盖了 <code>process</code> 方法。对所有类的编译过程都需要调用此方法进行处理。该方法每轮调用一次，最后使用空元素集调用一次。因此，我们使用一个简单的 if 在最后一轮中什么都不做。对于其他轮次，我们使用上面定义的死循环代码检测器<code>EndlessLoopChecker</code>进行处理。该方法返回 true，以便其他处理器继续处理。</li>
+</ul>
+<p>在<code>init</code>方法中我们使用处理环境（ProcessingEnvironment）来获取必要的编译器组件。在编译器中，对编译器的每次调用都使用单个处理环境（或上下文，在内部称为上下文）。然后使用上下文来确保每次编译器调用存在每个编译器组件的单一副本。在编译器中，我们只需使用 <code>Component.instance</code> 来获得对组件的引用。我们使用到的组件有：</p>
+<ul>
+<li>Trees：在程序元素和树节点之间架桥。例如，给定一个方法元素，我们可以得到它关联的 AST 树节点。</li>
+<li>TreeMaker：编译器的内部组件，它是创建树节点的工厂。</li>
+<li>JavacElements：用于实例化和存储抽象语法树的元素节点。</li>
+</ul>
+<p>最后我们在获取编译任务时设置该处理器，</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_22-38-25.png" alt="Snipaste_2020-06-17_22-38-25.png"></p>
+<p>下面我们来运行看看效果，可以看到代码跑了三秒后抛出异常：</p>
+<p><img src="https://golb.cc/images/java/jdk/javac/Snipaste_2020-06-17_22-43-36.png" alt="Snipaste_2020-06-17_22-43-36.png"></p>
+<h3 id="总结">总结</h3>
+<p>本文介绍了 olycode 的实现部分，并展开介绍了相关的 Compiler API 及基于它和类加载机制实现源代码的编译执行，另外为了实现死循环代码的检测，利用 Compiler Tree API 进行抽象语法树分析，再在其基础上，使用 Pluggable Annotation Processing 机制，设置编译器注解处理程序，实现抽象语法树循环元素节点的分析和动态操纵，通过植入超时判断语句节点，生成新的目标代码，实现死循环代码超时异常处理。</p>
+<p>上述实例代码已经上传到了Github，感兴趣的朋友可以点<a href="https://github.com/cszxyang/java-tutorial/tree/master/jdk-javac">传送门</a>。</p>
+<p>这里再简单扩展一下，如果你进行过 Java 开发，那么很可能听说过 <a href="https://github.com/rzwitserloot/lombok">lombok</a>，其实它的设计思想就是基于类似上面所述的语法树分析和操纵，并通过插件化的注解处理器实现编译器动态代码生成。感兴趣可以看看这个 DIY 的 <a href="https://github.com/cszxyang/java-tutorial/tree/master/diy-lombok">乞丐版lombok</a>，限于篇幅，以后有机会再抽空详述。</p>
+<p>以上，希望对你有帮助，欢迎在评论区给我留言。</p>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+      <span class="readmore-prev readmore-meta">PREV: <a href="https://golb.cc/blog/2020/08/14/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%9C%A8%E5%AE%9E%E9%99%85%E9%A1%B9%E7%9B%AE%E4%B8%AD%E7%9A%84%E7%AD%96%E7%95%A5%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E5%BA%94%E7%94%A8/"><h4>记一次在实际项目中的策略设计模式应用</h4></a></span>
+      
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2020/05/30/%E4%B8%80%E4%B8%AA%E6%98%93%E6%89%A9%E5%B1%95%E7%9A%84%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E7%BB%84%E4%BB%B6%E5%AE%9E%E7%8E%B0/"><h4>一个易扩展的负载均衡组件实现</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+
