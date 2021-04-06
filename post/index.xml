@@ -7,7 +7,16 @@
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
     <copyright>All rights reserved &amp;copy; 2018 - 2020</copyright>
-    <lastBuildDate>Sat, 29 Aug 2020 08:50:24 +0200</lastBuildDate><atom:link href="https://golb.cc/post/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Tue, 06 Apr 2021 10:54:24 +0200</lastBuildDate><atom:link href="https://golb.cc/post/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>记一次工作中数据库死锁问题定位与解决</title>
+      <link>https://golb.cc/blog/2021/04/06/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%B7%A5%E4%BD%9C%E4%B8%AD%E6%95%B0%E6%8D%AE%E5%BA%93%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E4%B8%8E%E8%A7%A3%E5%86%B3/</link>
+      <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
+      
+      <guid>https://golb.cc/blog/2021/04/06/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%B7%A5%E4%BD%9C%E4%B8%AD%E6%95%B0%E6%8D%AE%E5%BA%93%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E4%B8%8E%E8%A7%A3%E5%86%B3/</guid>
+      <description>&lt;p&gt;本文主要记录一次在工作中遇到的数据库死锁问题的定位与解决过程。&lt;/p&gt;</description>
+    </item>
+    
     <item>
       <title>谈摄影</title>
       <link>https://golb.cc/blog/2020/08/29/%E8%B0%88%E6%91%84%E5%BD%B1/</link>

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       记一次工作中数据库死锁问题定位与解决 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" 记一次工作中数据库死锁问题定位与解决 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2021/04/06/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%B7%A5%E4%BD%9C%E4%B8%AD%E6%95%B0%E6%8D%AE%E5%BA%93%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E4%B8%8E%E8%A7%A3%E5%86%B3/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2021-04-06T10:54:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    <meta property="og:article:tag" content="数据库" />
+    
+    <meta property="og:article:tag" content="mysql" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/highlight.css">
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/atom-one-dark.css">
+    
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+   
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2021/04/06/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%B7%A5%E4%BD%9C%E4%B8%AD%E6%95%B0%E6%8D%AE%E5%BA%93%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E4%B8%8E%E8%A7%A3%E5%86%B3/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">记一次工作中数据库死锁问题定位与解决</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">记一次工作中数据库死锁问题定位与解决</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">#数据库</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/mysql/">#mysql</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2021-04-06T10:54:24&#43;02:00">
+            2021/4/6
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文主要记录一次在工作中遇到的数据库死锁问题的定位与解决过程。</p>
+<h3 id="一问题背景">一、问题背景</h3>
+<p>最近在工作中遇到了几次类似的数据库死锁的问题，比如这条告警，提示在更新某张表的时候出现了死锁。</p>
+<p><img src="https://golb.cc/images/mysql/deadlock/Snipaste_2021-03-24_16-43-31.png" alt="Snipaste_2021-03-24_16-43-31.png"></p>
+<p>为了定位和解决这个问题，于是找 DBA 要死锁日志进行分析。在此之前，先回顾什么是死锁，死锁是怎么产生的，以及可以怎么解决。</p>
+<h3 id="二快速认识死锁">二、快速认识死锁</h3>
+<p>在操作系统中，如果系统中只有一个进程，当然不会产生死锁。如果每个进程仅需求一种系统资源，也不会产生死锁。不过这只是理想状态，在现实中是可遇不可求的。</p>
+<p>死锁的四个条件是：</p>
+<ol>
+<li><strong>禁止抢占</strong>（no preemption）：系统资源不能被强制从一个进程中退出。</li>
+<li><strong>持有和等待</strong>（hold and wait）：一个进程可以在等待时持有系统资源。</li>
+<li><strong>互斥</strong>（mutual exclusion）：资源只能同时分配给一个行程，无法多个行程共享。</li>
+<li><strong>循环等待</strong>（circular waiting）：一系列进程互相持有其他进程所需要的资源。</li>
+</ol>
+<p>死锁只有在四个条件同时满足时发生，预防死锁必须至少破坏其中一项。在数据库中，可以认为产生死锁是由于不同的线程间竞争资源且满足类似上述的四个条件。</p>
+<h3 id="三死锁日志分析">三、死锁日志分析</h3>
+<p>为了不提及公司相关信息，我对场景进行了迁移和还原。在一个仓储自动化系统中，为了提升发货效率，很基本地，出库作业会主要应用集分思想，即多个订单集中在一个作业区域拣货，然后再按照订单或包裹等其他维度进行分发，而多个订单一起作业期间往往会设置一个作业号，用于标记整个作业流程，当然子作业流程也会有相应的标识。另外，作业期间涉及很多作业容器，比如拣集到的商品会放到一个箱子里面去，然后分发时再从这个箱子里面的商品分到多个不同的小箱子里面去，然后再进行后续的打包发货流程，如果想深入了解可以查阅相关资料。我们假设有这么两张表：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql"><span style="color:#66d9ef">CREATE</span> <span style="color:#66d9ef">TABLE</span> <span style="color:#f92672">`</span>pick_box<span style="color:#f92672">`</span> (
+	<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span> <span style="color:#66d9ef">int</span>(<span style="color:#ae81ff">11</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">AUTO_INCREMENT</span> COMMENT <span style="color:#e6db74">&#39;id&#39;</span>,
+	<span style="color:#f92672">`</span>pick_box_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;箱号&#39;</span>,
+	<span style="color:#f92672">`</span>pick_box_status<span style="color:#f92672">`</span> <span style="color:#66d9ef">tinyint</span>(<span style="color:#ae81ff">4</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;状态，1拣集中，2拣集完成，3分发中，4分发完成&#39;</span>,
+	<span style="color:#f92672">`</span>global_flow_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;全局作业流水号&#39;</span>,
+	<span style="color:#f92672">`</span>pick_flow_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;拣集作业流水号&#39;</span>,
+	<span style="color:#f92672">`</span>pick_start_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;拣集开始时间&#39;</span>,
+  <span style="color:#f92672">`</span>pick_end_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;拣集结束时间&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_start_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;分发开始时间&#39;</span>,
+  <span style="color:#f92672">`</span>dispersal_end_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;分发结束时间&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_num<span style="color:#f92672">`</span> <span style="color:#66d9ef">int</span>(<span style="color:#ae81ff">11</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;分发数&#39;</span>,
+	<span style="color:#f92672">`</span>total_goods_num<span style="color:#f92672">`</span> <span style="color:#66d9ef">int</span>(<span style="color:#ae81ff">11</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;总件数&#39;</span>,
+	<span style="color:#f92672">`</span>is_done<span style="color:#f92672">`</span> <span style="color:#66d9ef">tinyint</span>(<span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;是否完成  1 是 0 否&#39;</span>,
+	<span style="color:#f92672">`</span>is_delete<span style="color:#f92672">`</span> <span style="color:#66d9ef">tinyint</span>(<span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;是否删除标记0 未删除 1 已删除&#39;</span>,
+	<span style="color:#66d9ef">PRIMARY</span> <span style="color:#66d9ef">KEY</span> (<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span>) <span style="color:#66d9ef">USING</span> BTREE
+) <span style="color:#66d9ef">ENGINE</span><span style="color:#f92672">=</span>InnoDB <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">CHARSET</span><span style="color:#f92672">=</span>utf8mb4 ROW_FORMAT<span style="color:#f92672">=</span>COMPACT COMMENT<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;拣集箱&#39;</span>;
+
+<span style="color:#66d9ef">CREATE</span> <span style="color:#66d9ef">TABLE</span> <span style="color:#f92672">`</span>dispersal_box<span style="color:#f92672">`</span> (
+	<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span> <span style="color:#66d9ef">int</span>(<span style="color:#ae81ff">11</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">AUTO_INCREMENT</span> COMMENT <span style="color:#e6db74">&#39;id&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_box_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;箱号&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_box_status<span style="color:#f92672">`</span> <span style="color:#66d9ef">tinyint</span>(<span style="color:#ae81ff">4</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;状态，1分发中，2分发完成&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_num<span style="color:#f92672">`</span> <span style="color:#66d9ef">int</span>(<span style="color:#ae81ff">11</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;分发数&#39;</span>,
+	<span style="color:#f92672">`</span>global_flow_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;全局作业流水号&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_flow_code<span style="color:#f92672">`</span> <span style="color:#66d9ef">varchar</span>(<span style="color:#ae81ff">50</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;&#39;</span> COMMENT <span style="color:#e6db74">&#39;分发作业流水号&#39;</span>,
+	<span style="color:#f92672">`</span>dispersal_start_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;分发开始时间&#39;</span>,
+  <span style="color:#f92672">`</span>dispersal_end_time<span style="color:#f92672">`</span> <span style="color:#66d9ef">datetime</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">NULL</span> COMMENT <span style="color:#e6db74">&#39;分发结束时间&#39;</span>,
+	<span style="color:#f92672">`</span>is_delete<span style="color:#f92672">`</span> <span style="color:#66d9ef">tinyint</span>(<span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">NOT</span> <span style="color:#66d9ef">NULL</span> <span style="color:#66d9ef">DEFAULT</span> <span style="color:#e6db74">&#39;0&#39;</span> COMMENT <span style="color:#e6db74">&#39;是否删除标记0 未删除 1 已删除&#39;</span>,
+	<span style="color:#66d9ef">PRIMARY</span> <span style="color:#66d9ef">KEY</span> (<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span>) <span style="color:#66d9ef">USING</span> BTREE
+) <span style="color:#66d9ef">ENGINE</span><span style="color:#f92672">=</span>InnoDB <span style="color:#66d9ef">DEFAULT</span> <span style="color:#66d9ef">CHARSET</span><span style="color:#f92672">=</span>utf8mb4 ROW_FORMAT<span style="color:#f92672">=</span>COMPACT COMMENT<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;分发箱&#39;</span>;
+</code></pre></div><p>在这个已知条件下我们开始分析死锁文件，首先看到有这么一个事务，事务 ID 是 24680，它在等待 <code>pick_box</code> 表上的一行记录的释放：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql"><span style="color:#f92672">***</span> (<span style="color:#ae81ff">1</span>) TRANSACTION:
+TRANSACTION <span style="color:#ae81ff">24680</span>, ACTIVE <span style="color:#ae81ff">24</span> sec <span style="color:#66d9ef">starting</span> <span style="color:#66d9ef">index</span> <span style="color:#66d9ef">read</span>
+mysql <span style="color:#66d9ef">tables</span> <span style="color:#66d9ef">in</span> <span style="color:#66d9ef">use</span> <span style="color:#ae81ff">1</span>, locked <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">LOCK</span> WAIT <span style="color:#ae81ff">4</span> <span style="color:#66d9ef">lock</span> <span style="color:#a6e22e">struct</span>(s), heap size <span style="color:#ae81ff">1136</span>, <span style="color:#ae81ff">2</span> row <span style="color:#66d9ef">lock</span>(s), <span style="color:#66d9ef">undo</span> log entries <span style="color:#ae81ff">1</span>
+MySQL thread id <span style="color:#ae81ff">39</span>, OS thread handle <span style="color:#ae81ff">2580</span>, query id <span style="color:#ae81ff">916</span> localhost <span style="color:#ae81ff">127</span>.<span style="color:#ae81ff">0</span>.<span style="color:#ae81ff">0</span>.<span style="color:#ae81ff">1</span> root updating
+<span style="color:#66d9ef">UPDATE</span> pick_box
+<span style="color:#66d9ef">SET</span> dispersal_num <span style="color:#f92672">=</span> dispersal_num <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">WHERE</span>
+	id <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">AND</span> is_delete <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+<span style="color:#f92672">***</span> (<span style="color:#ae81ff">1</span>) WAITING <span style="color:#66d9ef">FOR</span> THIS <span style="color:#66d9ef">LOCK</span> <span style="color:#66d9ef">TO</span> BE GRANTED:
+RECORD LOCKS space id <span style="color:#ae81ff">135</span> page no <span style="color:#ae81ff">3</span> n bits <span style="color:#ae81ff">72</span> <span style="color:#66d9ef">index</span> <span style="color:#66d9ef">PRIMARY</span> of <span style="color:#66d9ef">table</span> <span style="color:#f92672">`</span>demo<span style="color:#f92672">`</span>.<span style="color:#f92672">`</span>pick_box<span style="color:#f92672">`</span> trx id <span style="color:#ae81ff">24680</span> lock_mode X locks rec but <span style="color:#66d9ef">not</span> gap waiting
+Record <span style="color:#66d9ef">lock</span>, heap no <span style="color:#ae81ff">2</span> PHYSICAL RECORD: n_fields <span style="color:#ae81ff">15</span>; compact format; info bits <span style="color:#ae81ff">0</span>
+ <span style="color:#ae81ff">0</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000001</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">1</span>: len <span style="color:#ae81ff">6</span>; hex <span style="color:#ae81ff">00000000604</span>f; <span style="color:#66d9ef">asc</span>     <span style="color:#f92672">`</span>O;;
+ <span style="color:#ae81ff">2</span>: len <span style="color:#ae81ff">7</span>; hex <span style="color:#ae81ff">35000001471</span>f11; <span style="color:#66d9ef">asc</span> <span style="color:#ae81ff">5</span>   G  ;;
+ <span style="color:#ae81ff">3</span>: len <span style="color:#ae81ff">9</span>; hex <span style="color:#ae81ff">504243777475777775</span>; <span style="color:#66d9ef">asc</span> PBCwtuwwu;;
+ <span style="color:#ae81ff">4</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+ <span style="color:#ae81ff">5</span>: len <span style="color:#ae81ff">13</span>; hex <span style="color:#ae81ff">47464332303231303430353031</span>; <span style="color:#66d9ef">asc</span> GFC2021040501;;
+ <span style="color:#ae81ff">6</span>: len <span style="color:#ae81ff">15</span>; hex <span style="color:#ae81ff">504643323032313034303530313031</span>; <span style="color:#66d9ef">asc</span> PFC202104050101;;
+ <span style="color:#ae81ff">7</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b458d; <span style="color:#66d9ef">asc</span>   KE ;;
+ <span style="color:#ae81ff">8</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b558d; <span style="color:#66d9ef">asc</span>   KU ;;
+ <span style="color:#ae81ff">9</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b658d; <span style="color:#66d9ef">asc</span>   Ke ;;
+ <span style="color:#ae81ff">10</span>: <span style="color:#66d9ef">SQL</span> <span style="color:#66d9ef">NULL</span>;
+ <span style="color:#ae81ff">11</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000003</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">12</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000004</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">13</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+ <span style="color:#ae81ff">14</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+</code></pre></div><p>另外有一个事务，事务 ID 是 24679，它持有了 <code>pick_box</code> 上的主键锁，同时它又尝试通过全局作业流水号去把整个作业流水下的分发箱全部更新成完成，但是发现有记录被锁住了，需要授权（GRANTED）拿到锁才能进行操作。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql"><span style="color:#f92672">***</span> (<span style="color:#ae81ff">2</span>) TRANSACTION:
+TRANSACTION <span style="color:#ae81ff">24679</span>, ACTIVE <span style="color:#ae81ff">30</span> sec fetching rows, thread declared inside InnoDB <span style="color:#ae81ff">4999</span>
+mysql <span style="color:#66d9ef">tables</span> <span style="color:#66d9ef">in</span> <span style="color:#66d9ef">use</span> <span style="color:#ae81ff">1</span>, locked <span style="color:#ae81ff">1</span>
+<span style="color:#ae81ff">5</span> <span style="color:#66d9ef">lock</span> <span style="color:#a6e22e">struct</span>(s), heap size <span style="color:#ae81ff">1136</span>, <span style="color:#ae81ff">3</span> row <span style="color:#66d9ef">lock</span>(s)
+MySQL thread id <span style="color:#ae81ff">38</span>, OS thread handle <span style="color:#ae81ff">4516</span>, query id <span style="color:#ae81ff">920</span> localhost <span style="color:#ae81ff">127</span>.<span style="color:#ae81ff">0</span>.<span style="color:#ae81ff">0</span>.<span style="color:#ae81ff">1</span> root updating
+<span style="color:#66d9ef">UPDATE</span> dispersal_box
+<span style="color:#66d9ef">SET</span> dispersal_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>, dispersal_end_time <span style="color:#f92672">=</span> <span style="color:#a6e22e">now</span>()
+<span style="color:#66d9ef">WHERE</span>
+	(
+		dispersal_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+		<span style="color:#66d9ef">AND</span> global_flow_code <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;GFC2021040501&#39;</span>
+		<span style="color:#66d9ef">AND</span> is_delete <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+	)
+<span style="color:#f92672">***</span> (<span style="color:#ae81ff">2</span>) HOLDS THE <span style="color:#66d9ef">LOCK</span>(S):
+RECORD LOCKS space id <span style="color:#ae81ff">135</span> page no <span style="color:#ae81ff">3</span> n bits <span style="color:#ae81ff">72</span> <span style="color:#66d9ef">index</span> <span style="color:#66d9ef">PRIMARY</span> of <span style="color:#66d9ef">table</span> <span style="color:#f92672">`</span>demo<span style="color:#f92672">`</span>.<span style="color:#f92672">`</span>pick_box<span style="color:#f92672">`</span> trx id <span style="color:#ae81ff">24679</span> lock_mode X locks rec but <span style="color:#66d9ef">not</span> gap
+Record <span style="color:#66d9ef">lock</span>, heap no <span style="color:#ae81ff">2</span> PHYSICAL RECORD: n_fields <span style="color:#ae81ff">15</span>; compact format; info bits <span style="color:#ae81ff">0</span>
+ <span style="color:#ae81ff">0</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000001</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">1</span>: len <span style="color:#ae81ff">6</span>; hex <span style="color:#ae81ff">00000000604</span>f; <span style="color:#66d9ef">asc</span>     <span style="color:#f92672">`</span>O;;
+ <span style="color:#ae81ff">2</span>: len <span style="color:#ae81ff">7</span>; hex <span style="color:#ae81ff">35000001471</span>f11; <span style="color:#66d9ef">asc</span> <span style="color:#ae81ff">5</span>   G  ;;
+ <span style="color:#ae81ff">3</span>: len <span style="color:#ae81ff">9</span>; hex <span style="color:#ae81ff">504243777475777775</span>; <span style="color:#66d9ef">asc</span> PBCwtuwwu;;
+ <span style="color:#ae81ff">4</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+ <span style="color:#ae81ff">5</span>: len <span style="color:#ae81ff">13</span>; hex <span style="color:#ae81ff">47464332303231303430353031</span>; <span style="color:#66d9ef">asc</span> GFC2021040501;;
+ <span style="color:#ae81ff">6</span>: len <span style="color:#ae81ff">15</span>; hex <span style="color:#ae81ff">504643323032313034303530313031</span>; <span style="color:#66d9ef">asc</span> PFC202104050101;;
+ <span style="color:#ae81ff">7</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b458d; <span style="color:#66d9ef">asc</span>   KE ;;
+ <span style="color:#ae81ff">8</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b558d; <span style="color:#66d9ef">asc</span>   KU ;;
+ <span style="color:#ae81ff">9</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94b658d; <span style="color:#66d9ef">asc</span>   Ke ;;
+ <span style="color:#ae81ff">10</span>: <span style="color:#66d9ef">SQL</span> <span style="color:#66d9ef">NULL</span>;
+ <span style="color:#ae81ff">11</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000003</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">12</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000004</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">13</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+ <span style="color:#ae81ff">14</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+
+<span style="color:#f92672">***</span> (<span style="color:#ae81ff">2</span>) WAITING <span style="color:#66d9ef">FOR</span> THIS <span style="color:#66d9ef">LOCK</span> <span style="color:#66d9ef">TO</span> BE GRANTED:
+RECORD LOCKS space id <span style="color:#ae81ff">136</span> page no <span style="color:#ae81ff">3</span> n bits <span style="color:#ae81ff">72</span> <span style="color:#66d9ef">index</span> <span style="color:#66d9ef">PRIMARY</span> of <span style="color:#66d9ef">table</span> <span style="color:#f92672">`</span>demo<span style="color:#f92672">`</span>.<span style="color:#f92672">`</span>dispersal_box<span style="color:#f92672">`</span> trx id <span style="color:#ae81ff">24679</span> lock_mode X waiting
+Record <span style="color:#66d9ef">lock</span>, heap no <span style="color:#ae81ff">3</span> PHYSICAL RECORD: n_fields <span style="color:#ae81ff">11</span>; compact format; info bits <span style="color:#ae81ff">0</span>
+ <span style="color:#ae81ff">0</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000002</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">1</span>: len <span style="color:#ae81ff">6</span>; hex <span style="color:#ae81ff">000000006068</span>; <span style="color:#66d9ef">asc</span>     <span style="color:#f92672">`</span>h;;
+ <span style="color:#ae81ff">2</span>: len <span style="color:#ae81ff">7</span>; hex <span style="color:#ae81ff">46000001</span>c70d0c; <span style="color:#66d9ef">asc</span> F      ;;
+ <span style="color:#ae81ff">3</span>: len <span style="color:#ae81ff">10</span>; hex <span style="color:#ae81ff">44424365716571723032</span>; <span style="color:#66d9ef">asc</span> DBCeqeqr02;;
+ <span style="color:#ae81ff">4</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">81</span>; <span style="color:#66d9ef">asc</span>  ;;
+ <span style="color:#ae81ff">5</span>: len <span style="color:#ae81ff">4</span>; hex <span style="color:#ae81ff">80000002</span>; <span style="color:#66d9ef">asc</span>     ;;
+ <span style="color:#ae81ff">6</span>: len <span style="color:#ae81ff">13</span>; hex <span style="color:#ae81ff">47464332303231303430353031</span>; <span style="color:#66d9ef">asc</span> GFC2021040501;;
+ <span style="color:#ae81ff">7</span>: len <span style="color:#ae81ff">15</span>; hex <span style="color:#ae81ff">444643323032313034303530313032</span>; <span style="color:#66d9ef">asc</span> DFC202104050102;;
+ <span style="color:#ae81ff">8</span>: len <span style="color:#ae81ff">5</span>; hex <span style="color:#ae81ff">99</span>a94a334e; <span style="color:#66d9ef">asc</span>   J3N;;
+ <span style="color:#ae81ff">9</span>: <span style="color:#66d9ef">SQL</span> <span style="color:#66d9ef">NULL</span>;
+ <span style="color:#ae81ff">10</span>: len <span style="color:#ae81ff">1</span>; hex <span style="color:#ae81ff">80</span>; <span style="color:#66d9ef">asc</span>  ;;
+
+<span style="color:#f92672">***</span> WE ROLL BACK <span style="color:#a6e22e">TRANSACTION</span> (<span style="color:#ae81ff">2</span>)
+</code></pre></div><p>现在问题大致清晰了，上述死锁产生的场景很可能如下面的时序图所示：</p>
+<table>
+<thead>
+<tr>
+<th>事务 1（24680）</th>
+<th>事务 2（24679）</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td>（1） ？</td>
+<td>事务 2 持有 <code>pick_box</code> 的主键锁</td>
+</tr>
+<tr>
+<td>（2）？</td>
+<td></td>
+<td>根据产生死锁的四个必要条件，事务 1 必然锁住了 <code>dispersal_box</code> 的某些数据</td>
+</tr>
+<tr>
+<td>（3）<code>UPDATE pick_box SET dispersal_num = dispersal_num + 1 WHERE id = 1 AND is_delete = 0;</code></td>
+<td></td>
+<td>事务 1 等待事务 2 加在 <code>pick_box</code> 上 id 为 1 的记录的行锁释放</td>
+</tr>
+<tr>
+<td></td>
+<td>（4） <code>UPDATE dispersal_box SET dispersal_box_status = 2, dispersal_end_time = now() WHERE (dispersal_box_status = 1 AND global_flow_code = 'GFC2021040501' AND is_delete = 0);</code></td>
+<td>事务 2 等待事务 1 在 <code>dispersal_box</code> 上加的锁，成环，死锁产生</td>
+</tr>
+</tbody>
+</table>
+<p>根据产生死锁的四个必要条件，现在需要确认（1）和（2）处的 SQL 执行了什么操作，初步估计</p>
+<ul>
+<li>（1）处事务 2 根据主键对 <code>pick_box</code>表进行更新并拿到锁；</li>
+<li>（2）处事务 1 根据主键对 <code>dispersal_box</code> 表进行更新并拿到锁；</li>
+<li>（3）处事务 2 尝试通过波次号更新 <code>dispersal_box</code> 的多条记录，但其中某条记录在（2）处被事务 1 锁住，所以事务 2 开始等待事务 1 释放锁；</li>
+<li>（4）处事务 1 尝试获取 <code>pick_box</code>的主键锁，但是（1）处已经锁住了其中的某条记录，所以事务 1 开始等待事务 2 释放锁，于是陷入死锁。</li>
+</ul>
+<h3 id="四代码定位">四、代码定位</h3>
+<p>根据上述的分析和告警的日志记录的 trace 信息，我发现下面这两个事务的这两行代码的嫌疑很大，为了不泄露公司代码，只给出大概的伪码，其中一个事务（很可能就是上述的事务 1）根据 <code>pickBoxId</code> 去更新 pick_box 这张表，同时前面有更新 <code>dispersal_box</code>  的操作。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#a6e22e">@Transaction</span>
+<span style="color:#a6e22e">@Override</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">doDisperse</span><span style="color:#f92672">(...)</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">// ...
+</span><span style="color:#75715e"></span>    increaseDispersalNum<span style="color:#f92672">();</span>
+    pickBoxService<span style="color:#f92672">.</span><span style="color:#a6e22e">increaseDispersalNum</span><span style="color:#f92672">(</span>pickBoxId<span style="color:#f92672">);</span>
+    <span style="color:#75715e">// ...
+</span><span style="color:#75715e"></span><span style="color:#f92672">}</span>
+</code></pre></div><p>另外一个事务则先更新 <code>pick_box</code> 的数据，然后根据全局作业流水号去更新 <code>dispersal_box</code>  ，这样看这个事务很可能就是事务 2。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#a6e22e">@Transaction</span>
+<span style="color:#a6e22e">@Override</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">forceDisperse2Finish</span><span style="color:#f92672">(...)</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">// ...
+</span><span style="color:#75715e"></span>    finishPickBox<span style="color:#f92672">(</span>pickBox<span style="color:#f92672">);</span>
+    dispersalBoxService<span style="color:#f92672">.</span><span style="color:#a6e22e">finishAllBoxes</span><span style="color:#f92672">(</span>globalFlowCode<span style="color:#f92672">);</span>
+    <span style="color:#75715e">// ...
+</span><span style="color:#75715e"></span><span style="color:#f92672">}</span>
+</code></pre></div><p>结合代码和死锁文件，现在已经很清晰了，上面的时序图可以填完完整了：</p>
+<table>
+<thead>
+<tr>
+<th>事务 1（24680）</th>
+<th>事务 2（24679）</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td>（1）<code>UPDATE pick_box SET pick_box_status = 4 AND dispersal_end_time = now() AND is_done = 1 WHERE id = 1 AND is_delete = 0 AND pick_box_status = 3;</code></td>
+<td>事务 2 持有 <code>pick_box</code> 的主键锁</td>
+</tr>
+<tr>
+<td>（2）<code>UPDATE dispersal_box SET dispersal_num = dispersal_num + 1 WHERE id = 2;</code></td>
+<td></td>
+<td>根据产生死锁的四个必要条件，事务 1 必然锁住了 <code>dispersal_box</code> 的某些数据</td>
+</tr>
+<tr>
+<td>（3）<code>UPDATE pick_box SET dispersal_num = dispersal_num + 1 WHERE id = 1 AND is_delete = 0;</code></td>
+<td></td>
+<td>事务 1 等待事务 2 加在 <code>pick_box</code> 上 id 为 1 的记录的行锁释放</td>
+</tr>
+<tr>
+<td></td>
+<td>（4） <code>UPDATE dispersal_box SET dispersal_box_status = 2, dispersal_end_time = now() WHERE (dispersal_box_status = 1 AND global_flow_code = 'GFC2021040501' AND is_delete = 0);</code></td>
+<td>事务 2 等待事务 1 在 <code>dispersal_box</code> 上加的锁，成环，死锁产生</td>
+</tr>
+</tbody>
+</table>
+<h3 id="五场景复现">五、场景复现</h3>
+<p>尽管如此，上面的场景也仅仅是我的猜测而已，那么实际上这样是不是真的会出现死锁呢？百看不如一干，我们不妨来造个数据复现一下：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql"><span style="color:#66d9ef">INSERT</span> <span style="color:#66d9ef">INTO</span> <span style="color:#f92672">`</span>pick_box<span style="color:#f92672">`</span> (
+	<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>pick_box_code<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>pick_box_status<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>global_flow_code<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>pick_flow_code<span style="color:#f92672">`</span>,
+	<span style="color:#f92672">`</span>pick_start_time<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>pick_end_time<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_start_time<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_end_time<span style="color:#f92672">`</span>,
+	<span style="color:#f92672">`</span>dispersal_num<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>total_goods_num<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>is_done<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>is_delete<span style="color:#f92672">`</span>
+) <span style="color:#66d9ef">VALUES</span> 
+( <span style="color:#e6db74">&#39;1&#39;</span>, <span style="color:#e6db74">&#39;PBCwtuwwu&#39;</span>, <span style="color:#e6db74">&#39;3&#39;</span>, <span style="color:#e6db74">&#39;GFC2021040501&#39;</span>, <span style="color:#e6db74">&#39;PFC202104050101&#39;</span>, <span style="color:#e6db74">&#39;2021-04-05 20:22:13&#39;</span>, <span style="color:#e6db74">&#39;2021-04-05 21:22:13&#39;</span>,
+    <span style="color:#e6db74">&#39;2021-04-05 22:22:13&#39;</span>, <span style="color:#66d9ef">null</span>, <span style="color:#e6db74">&#39;0&#39;</span>, <span style="color:#e6db74">&#39;4&#39;</span>, <span style="color:#e6db74">&#39;0&#39;</span>, <span style="color:#e6db74">&#39;0&#39;</span>);
+    
+<span style="color:#66d9ef">INSERT</span> <span style="color:#66d9ef">INTO</span> <span style="color:#f92672">`</span>dispersal_box<span style="color:#f92672">`</span> (
+	<span style="color:#f92672">`</span>id<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_box_code<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_box_status<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_num<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>global_flow_code<span style="color:#f92672">`</span>,
+	<span style="color:#f92672">`</span>dispersal_flow_code<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_start_time<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>dispersal_end_time<span style="color:#f92672">`</span>, <span style="color:#f92672">`</span>is_delete<span style="color:#f92672">`</span>
+) <span style="color:#66d9ef">VALUES</span> 
+(<span style="color:#ae81ff">1</span>, <span style="color:#e6db74">&#39;DBCeqeqr01&#39;</span>, <span style="color:#ae81ff">2</span>, <span style="color:#e6db74">&#39;2&#39;</span>, <span style="color:#e6db74">&#39;GFC2021040501&#39;</span>, <span style="color:#e6db74">&#39;DFC202104050101&#39;</span>, <span style="color:#e6db74">&#39;2021-04-05 02:13:14&#39;</span>, <span style="color:#e6db74">&#39;2021-04-05 02:14:14&#39;</span>, <span style="color:#e6db74">&#39;0&#39;</span>),
+(<span style="color:#ae81ff">2</span>, <span style="color:#e6db74">&#39;DBCeqeqr02&#39;</span>, <span style="color:#ae81ff">1</span>, <span style="color:#e6db74">&#39;1&#39;</span>, <span style="color:#e6db74">&#39;GFC2021040501&#39;</span>, <span style="color:#e6db74">&#39;DFC202104050102&#39;</span>, <span style="color:#e6db74">&#39;2021-04-05 03:13:14&#39;</span>, <span style="color:#66d9ef">null</span>, <span style="color:#e6db74">&#39;0&#39;</span>);
+</code></pre></div><p>通过命令 <code>SET autocommit=0;</code> 开启手动提交事务：然后开启两个连接进行测试，连接 1 开启事务，按顺序执行下面的 SQL，执行完第三步，先不提交。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql">START TRANSACTION;
+<span style="color:#75715e">#1
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">UPDATE</span> pick_box
+<span style="color:#66d9ef">SET</span> pick_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">4</span>
+<span style="color:#66d9ef">AND</span> dispersal_end_time <span style="color:#f92672">=</span> <span style="color:#a6e22e">now</span>()
+<span style="color:#66d9ef">AND</span> is_done <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">WHERE</span>
+	id <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">AND</span> is_delete <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+<span style="color:#66d9ef">AND</span> pick_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">3</span>;
+<span style="color:#75715e">#4
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">UPDATE</span> dispersal_box
+<span style="color:#66d9ef">SET</span> dispersal_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>, dispersal_end_time <span style="color:#f92672">=</span> <span style="color:#a6e22e">now</span>()
+<span style="color:#66d9ef">WHERE</span>
+	(
+		dispersal_box_status <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+		<span style="color:#66d9ef">AND</span> global_flow_code <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;GFC2021040501&#39;</span>
+		<span style="color:#66d9ef">AND</span> is_delete <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+	);
+</code></pre></div><p>连接 2 开启事务，按顺序执行下面的 SQL 语句：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-mysql" data-lang="mysql">START TRANSACTION;
+<span style="color:#75715e">#2
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">UPDATE</span> dispersal_box
+<span style="color:#66d9ef">SET</span> dispersal_num <span style="color:#f92672">=</span> dispersal_num <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">WHERE</span>
+	id <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>;
+<span style="color:#75715e">#3
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">UPDATE</span> pick_box
+<span style="color:#66d9ef">SET</span> dispersal_num <span style="color:#f92672">=</span> dispersal_num <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">WHERE</span>
+	id <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
+<span style="color:#66d9ef">AND</span> is_delete <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</code></pre></div><p>执行完第四步，死锁复现。</p>
+<p><img src="https://golb.cc/images/mysql/deadlock/Snipaste_2021-04-06_19-28-44.png" alt="Snipaste_2021-04-06_19-28-44.png"></p>
+<h3 id="六问题解决">六、问题解决</h3>
+<p>说到底就是破坏死锁的四个必要条件中的一个，首先想到的是可以对事务中更新数据的顺序进行调整，比如将事务 1 的（2）和（3）处调换顺序，那么如果事务 1 先执行，那么事务 2 的（1）处将需要等待（2）处的锁释放才能进行（4）处的操作；同理如果事务 2 先执行，那么事务 1 也需要先等待事务 2 执行完（1）才能进行（3）处的操作，这就相当于破除了死锁的四个必要条件中的 “持有和等待” 以及 “循环等待” 这两点。</p>
+<table>
+<thead>
+<tr>
+<th>事务 1（24680）</th>
+<th>事务 2（24679）</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td>（1）<code>UPDATE pick_box SET pick_box_status = 4 AND dispersal_end_time = now() AND is_done = 1 WHERE id = 1 AND is_delete = 0 AND pick_box_status = 3;</code></td>
+<td>事务 2 持有 <code>pick_box</code> 的主键锁</td>
+</tr>
+<tr>
+<td>（2）<code>UPDATE pick_box SET dispersal_num = dispersal_num + 1 WHERE id = 1 AND is_delete = 0;</code></td>
+<td></td>
+<td>根据产生死锁的四个必要条件，事务 1 必然锁住了 <code>dispersal_box</code> 的某些数据</td>
+</tr>
+<tr>
+<td>（3）<code>UPDATE dispersal_box SET dispersal_num = dispersal_num + 1 WHERE id = 2;</code></td>
+<td></td>
+<td>事务 1 等待事务 2 加在 <code>pick_box</code> 上 id 为 1 的记录的行锁释放</td>
+</tr>
+<tr>
+<td></td>
+<td>（4） <code>UPDATE dispersal_box SET dispersal_box_status = 2, dispersal_end_time = now() WHERE (dispersal_box_status = 1 AND global_flow_code = 'GFC2021040501' AND is_delete = 0);</code></td>
+<td>事务 2 等待事务 1 在 <code>dispersal_box</code> 上加的锁，成环，死锁产生</td>
+</tr>
+</tbody>
+</table>
+<p>另外的方法是可以与产品协商是否可以在程序中加分布式锁控制，同一时刻只能允许上述两个业务中的一个进行操作，这样其实相当于在一个事务中把两个资源作为一个进行操作，而且事务不并发。</p>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2020/08/29/%E8%B0%88%E6%91%84%E5%BD%B1/"><h4>谈摄影</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+
