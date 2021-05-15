@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       浅谈 MySQL 的 MVCC 机制 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" 浅谈 MySQL 的 MVCC 机制 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2021/05/14/%E6%B5%85%E8%B0%88-mysql-%E7%9A%84-mvcc-%E6%9C%BA%E5%88%B6/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2021-05-14T10:54:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="mysql" />
+    
+    <meta property="og:article:tag" content="数据库" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/highlight.css">
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/atom-one-dark.css">
+    
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+   
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2021/05/14/%E6%B5%85%E8%B0%88-mysql-%E7%9A%84-mvcc-%E6%9C%BA%E5%88%B6/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">浅谈 MySQL 的 MVCC 机制</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">浅谈 MySQL 的 MVCC 机制</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/mysql/">#mysql</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">#数据库</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2021-05-14T10:54:24&#43;02:00">
+            2021/5/14
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文主要谈谈我对 MySQL 的 MVCC 机制的一些认知和理解。</p>
+<p>最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。</p>
+<h4 id="一简介">一、简介</h4>
+<p>MVCC 可用于实现 RC 和 RR 隔离级别的一致性读，基本思想是通过维护数据行的历史版本及比较版本数据和当前系统的活跃事务情况以决定返回给客户端查询的镜像数据。
+MVCC 主要依赖：</p>
+<ol>
+<li>数据行隐藏的辅助列</li>
+<li>Read View</li>
+<li>Undo Logs</li>
+</ol>
+<h4 id="二辅助列">二、辅助列</h4>
+<p>InnoDB 为聚簇索引中的记录加了几个隐藏的列（源码见 /storage/innobase/include/data0type.h）：</p>
+<ul>
+<li>DB_ROW_ID：6 字节大小，隐式的自增的行标记，若表不定义聚簇索引，InnoDB 自动在该列上创建聚簇索引；</li>
+<li>DB_TRX_ID：6 字节大小，标识最后插入、更新或删除该行的事务；</li>
+<li>DB_ROLL_PTR：7 字节，回滚指针，指向回滚段的首个 page</li>
+</ul>
+<p><img src="https://golb.cc/images/mysql/mvcc/2.png" alt="img"></p>
+<p>所以一行数据大概长这样：</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/1.png" alt="img"></p>
+<h4 id="三read-view">三、Read View</h4>
+<p>InnoDB 在实现 MVCC 时用到的一致性读视图，用于支持 RC 和 RR 隔离级别的实现，Read View 是以逆序排列的，其代码位于 storage/innobase/include/read0read.h，属性包括：</p>
+<ul>
+<li>low_limit_id：事务 ID 大于等于该值的事务不能看到该视图，高水位</li>
+<li>up_limit_id：事务 ID 大于等于该值的事务能看到该视图，低水位</li>
+<li>n_trx_ids：当前活跃事务（即未提交的事务）的数量</li>
+<li>trx_ids：以逆序排列的当前获取活跃事务 ID 的数组（其up_limit_id &lt; tx_id &lt; low_limit_id）</li>
+<li>creator_trx_id：创建当前视图的事务 ID</li>
+</ul>
+<p>视图创建过程：</p>
+<p>获取当前全局事务链表，剔除其中已提交及当前事务得到当前事务的一致性视图，并记录高低水位的事务 ID，代码见 storage/innobase/read/read0read.cc 里面的 read_view_open_now_low 方法。</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/3.png" alt="img"></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-C++" data-lang="C++"><span style="color:#66d9ef">static</span> read_view_t<span style="color:#f92672">*</span> <span style="color:#a6e22e">read_view_open_now_low</span>(
+	trx_id_t	cr_trx_id,	<span style="color:#75715e">/*!&lt; in: trx_id of creating
+</span><span style="color:#75715e">					transaction, or 0 used in purge */</span>
+	mem_heap_t<span style="color:#f92672">*</span>	heap)		<span style="color:#75715e">/*!&lt; in: memory heap from which
+</span><span style="color:#75715e">					allocated */</span>
+{
+	read_view_t<span style="color:#f92672">*</span>	view;
+	ulint		n_trx <span style="color:#f92672">=</span> UT_LIST_GET_LEN(trx_sys<span style="color:#f92672">-&gt;</span>rw_trx_list);
+	ut_ad(mutex_own(<span style="color:#f92672">&amp;</span>trx_sys<span style="color:#f92672">-&gt;</span>mutex));
+	view <span style="color:#f92672">=</span> read_view_create_low(n_trx, heap);
+	view<span style="color:#f92672">-&gt;</span>undo_no <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+	view<span style="color:#f92672">-&gt;</span>type <span style="color:#f92672">=</span> VIEW_NORMAL;
+	view<span style="color:#f92672">-&gt;</span>creator_trx_id <span style="color:#f92672">=</span> cr_trx_id;
+	<span style="color:#75715e">/* No future transactions should be visible in the view */</span>
+	view<span style="color:#f92672">-&gt;</span>low_limit_no <span style="color:#f92672">=</span> trx_sys<span style="color:#f92672">-&gt;</span>max_trx_id;
+	view<span style="color:#f92672">-&gt;</span>low_limit_id <span style="color:#f92672">=</span> view<span style="color:#f92672">-&gt;</span>low_limit_no;
+	<span style="color:#75715e">/* No active transaction should be visible, except cr_trx */</span>
+	ut_list_map(trx_sys<span style="color:#f92672">-&gt;</span>rw_trx_list, <span style="color:#f92672">&amp;</span>trx_t<span style="color:#f92672">::</span>trx_list, CreateView(view));
+	<span style="color:#66d9ef">if</span> (view<span style="color:#f92672">-&gt;</span>n_trx_ids <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">0</span>) {
+		<span style="color:#75715e">/* The last active transaction has the smallest id: */</span>
+		view<span style="color:#f92672">-&gt;</span>up_limit_id <span style="color:#f92672">=</span> view<span style="color:#f92672">-&gt;</span>trx_ids[view<span style="color:#f92672">-&gt;</span>n_trx_ids <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>];
+	} <span style="color:#66d9ef">else</span> {
+		view<span style="color:#f92672">-&gt;</span>up_limit_id <span style="color:#f92672">=</span> view<span style="color:#f92672">-&gt;</span>low_limit_id;
+	}
+	<span style="color:#75715e">/* Purge views are not added to the view list. */</span>
+	<span style="color:#66d9ef">if</span> (cr_trx_id <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">0</span>) {
+		read_view_add(view);
+	}
+	<span style="color:#66d9ef">return</span>(view);
+}
+</code></pre></div><h4 id="四undo-logs">四、Undo Logs</h4>
+<p>撤销日志，用于回滚事务对聚簇索引记录的更新</p>
+<ul>
+<li>撤销日志段（undo log segments）：由多条撤销日志组成；</li>
+<li>回滚段（rollback segments）：由多个撤销日志段组成，存在于系统表空间、撤销表空间和和临时表空间中。</li>
+</ul>
+<p><img src="https://golb.cc/images/mysql/mvcc/4.png" alt="img"></p>
+<p>回滚段的基本组织单元是页，一个数据记录的历史版本存储在某个段中，段以链表的形式存储，每个历史版本记为一个 log 记录，每个记录可能跨越多个页。</p>
+<ul>
+<li>undo 记录的代码见storage/innobase/include/trx0undo.h 中的 trx_undo_t  结构</li>
+<li>回滚段代码见 storage/innobase/include/trx0rseg.h 中的 trx_rseg_t 结构</li>
+</ul>
+<p>按我理解，数据行和回滚段的结构及关系大概长这样：</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/5.png" alt="img"></p>
+<h4 id="五版本可见性判断">五、版本可见性判断</h4>
+<p>Undo Logs 中记录了某个行的版本变化过程，当某个事务的查询过来的时候，如果查询在聚簇索引上，则将索引记录上的 DB_TRX_ID 和该事务的 Read View 进行匹配（见匹配规则）。
+如果查询走了二级索引，因为二级索引上只记录了最后更新该行的 DB_TRX_ID，所以也可以走匹配规则，如果匹配到并且走到覆盖索引，则可直接返回版本数据，否则需要进行回表，获取到回滚段的指针，并对版本链节点进行匹配（见匹配规则）</p>
+<p>比较规则如下所示，代码见storage/innobase/include/read0read.ic 中的 read_view_sees_trx_id 函数：</p>
+<ul>
+<li>如果 trx_id &lt; up_limit_id，则该版本的事务已经提交，可以读取。</li>
+<li>如果 trx_id &gt;= low_limit_id，则该版本的事务还没提交，不能读取。</li>
+<li>如果 trx_id == 当前事务 ID，可读取</li>
+<li>如果 up_limit_id &lt;= trx_id &lt; low_limit_id，使用二分查找，看 DB_TRX_ID 是否在 trx_ids 中，是则表示事务是活跃的，还没提交，不可读该版本，否则可读取。</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++"><span style="color:#66d9ef">bool</span> <span style="color:#a6e22e">read_view_sees_trx_id</span>(
+	<span style="color:#66d9ef">const</span> read_view_t<span style="color:#f92672">*</span>	view,	<span style="color:#75715e">/*!&lt; in: read view */</span>
+	trx_id_t		trx_id)	<span style="color:#75715e">/*!&lt; in: trx id */</span>
+{
+	<span style="color:#66d9ef">if</span> (trx_id <span style="color:#f92672">&lt;</span> view<span style="color:#f92672">-&gt;</span>up_limit_id) {
+		<span style="color:#66d9ef">return</span>(true);
+	} <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> (trx_id <span style="color:#f92672">&gt;=</span> view<span style="color:#f92672">-&gt;</span>low_limit_id) {
+		<span style="color:#66d9ef">return</span>(false);
+	} <span style="color:#66d9ef">else</span> {
+		ulint	lower <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+		ulint	upper <span style="color:#f92672">=</span> view<span style="color:#f92672">-&gt;</span>n_trx_ids <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>;
+		ut_a(view<span style="color:#f92672">-&gt;</span>n_trx_ids <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">0</span>);
+		<span style="color:#66d9ef">do</span> {
+			ulint		mid	<span style="color:#f92672">=</span> (lower <span style="color:#f92672">+</span> upper) <span style="color:#f92672">&gt;&gt;</span> <span style="color:#ae81ff">1</span>;
+			trx_id_t	mid_id	<span style="color:#f92672">=</span> view<span style="color:#f92672">-&gt;</span>trx_ids[mid];
+			<span style="color:#66d9ef">if</span> (mid_id <span style="color:#f92672">==</span> trx_id) {
+				<span style="color:#66d9ef">return</span>(FALSE);
+			} <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> (mid_id <span style="color:#f92672">&lt;</span> trx_id) {
+				<span style="color:#66d9ef">if</span> (mid <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">0</span>) {
+					upper <span style="color:#f92672">=</span> mid <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>;
+				} <span style="color:#66d9ef">else</span> {
+					<span style="color:#66d9ef">break</span>;
+				}
+			} <span style="color:#66d9ef">else</span> {
+				lower <span style="color:#f92672">=</span> mid <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>;
+			}
+		} <span style="color:#66d9ef">while</span> (lower <span style="color:#f92672">&lt;=</span> upper);
+	}
+	<span style="color:#66d9ef">return</span>(true);
+}
+</code></pre></div><p>为了实现不同的隔离级别，MVCC 有不同的创建 Read View 的机制：</p>
+<ul>
+<li>RR 级别下，事务中的第一个 SELECT 请求才开始创建 Read View，而且只会创建一个。</li>
+<li>RC 级别下，事务中每次 SELECT 请求都会重新创建一个 Read View。</li>
+</ul>
+<h4 id="六mvcc-工作实例">六、MVCC 工作实例</h4>
+<p>对于 RR 隔离级别，在第一次 SELECT 时创建的 Read View 伴随整个事务的生命周期，所以尽管事务 C 提交了新的修改，这个变动对事务 A 是不可见的，所以事务 A 两次获取到的 k 的值都是 1。</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/6.png" alt="img"></p>
+<p>对于 RC 隔离级别，每次 SELECT 时都会创建新的 Read View，所以事务 A 第一次查到的 k 的值是 1，当事务 C 提交后，事务 A 再次查询，遍历到版本链中事务 C 提交的改动时便返回了。</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/7.png" alt="img"></p>
+<h4 id="七rr-下的幻读问题">七、RR 下的幻读问题</h4>
+<p>假设我们在 RR 下进行以下实验，脚本的位置代表执行的时序</p>
+<p><img src="https://golb.cc/images/mysql/mvcc/8.png" alt="img"></p>
+<p>事务 1 还没提交能够查询到事务 2 插入的数据，产生了所谓的幻读现象。</p>
+<p>原因是对更新数据都是先读后写的，而这个读，只能读当前的值，称为“当前读”（current read） 所以事务 1 会读到事务 2 在版本链中插入的数据，并且进行修改，最后将自己的事务 ID 记录到 Undo Log 中，等到下次读取的时候判断到是自己事务的修改，就能把 id 是 3 的记录读出来。</p>
+<p>实际上 InnoDB 是解决了幻读问题的，因为读分为了快照读和当前读。</p>
+<p>在快照读下，InnoDB 通过 MVCC 避免幻读；而在当前读情况下，通过 Next-Key Lock 避免幻读。</p>
+<ul>
+<li>select * from t_user where id&gt;1; 属于快照读</li>
+<li>select * from t_user where id&gt;1 lock in share mode; 属于当前读</li>
+</ul>
+<p>不应该把快照读和当前读得到的结果不一样这种情况认为是幻读，这是两种不同的使用。</p>
+<h4 id="八参考">八、参考</h4>
+<ol>
+<li><a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-multi-versioning.html">MySQL 5.6 Reference Manual - InnoDB Multi-Versioning</a></li>
+<li><a href="https://github.com/mysql/mysql-server/tree/5.6">Github - mysql/mysql-server</a></li>
+<li><a href="https://www.aneasystone.com/archives/2017/10/solving-dead-locks-one.html">aneasystone&rsquo;s blog - 解决死锁之路 - 学习事务与隔离级别</a></li>
+<li><a href="http://www.imooc.com/article/17290">掘金 - MySQL数据库事务各隔离级别加锁情况</a></li>
+<li><a href="https://my.oschina.net/alchemystar/blog/1927425">MySQL多版本并发控制机制(MVCC)-源码浅析</a></li>
+</ol>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2021/04/06/%E8%AE%B0%E4%B8%80%E6%AC%A1%E5%B7%A5%E4%BD%9C%E4%B8%AD%E6%95%B0%E6%8D%AE%E5%BA%93%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E4%B8%8E%E8%A7%A3%E5%86%B3/"><h4>记一次工作中数据库死锁问题定位与解决</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+
