@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>hashmap on cszxyang</title>
+    <link>https://golb.cc/tags/hashmap/</link>
+    <description>Recent content in hashmap on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <copyright>All rights reserved &amp;copy; 2018 - 2020</copyright>
+    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate><atom:link href="https://golb.cc/tags/hashmap/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>聊聊多线程环境下的 HashMap</title>
+      <link>https://golb.cc/blog/2021/06/03/%E8%81%8A%E8%81%8A%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84-hashmap/</link>
+      <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
+      
+      <guid>https://golb.cc/blog/2021/06/03/%E8%81%8A%E8%81%8A%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84-hashmap/</guid>
+      <description>&lt;p&gt;本文主要谈谈多线程环境下的 HashMap 可能存在的并发问题。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>
