@@ -417,7 +417,7 @@ t1<span style="color:#f92672">.</span><span style="color:#a6e22e">start</span><s
         map<span style="color:#f92672">.</span><span style="color:#a6e22e">get</span><span style="color:#f92672">(</span>k1<span style="color:#f92672">);</span>
     <span style="color:#f92672">}</span>
 <span style="color:#f92672">});</span>
-</code></pre></div><p>Oye！死循环了！</p>
+</code></pre></div><p>为了结果直观化，我尝试将运行过程做成了 gif，看着还挺好玩。结果也很明显，的确出现了死循环。</p>
 <p><img src="https://golb.cc/images/java/jdk/hashmap/deadloop.gif" alt="deadloop.gif"></p>
 <p>与此同时，我们打开任务管理器查看 CPU 运行情况，可以看到 CPU 利用率已经去到了 100%，把程序停掉后恢复正常。</p>
 <p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-03_15-00-43.png" alt="Snipaste_2021-06-03_15-00-43.png"></p>
