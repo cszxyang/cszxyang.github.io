@@ -192,10 +192,10 @@
     <span style="color:#f92672">}</span>
     <span style="color:#66d9ef">return</span> res<span style="color:#f92672">;</span>
 <span style="color:#f92672">}</span>
-</code></pre></div><p>最近有同事提醒我，收集结果的地方潜在并发问题，原来我的考虑是在一个方法里创建的变量是在栈里面的，所以多线程并发时，创建的 <code>res</code> 对象是不一样的，所以没有线程安全问题，但是 Java 8 的流式处理是基于多线程的，即后面在方法内部再分发任务到  <code>executor</code>  的工作线程（我没睡醒），由于此处使用的是线程不安全的集合类，所以 add 方法存在线程安全问题，解决方案是将问题行替换为：</p>
+</code></pre></div><p>最近有同事提醒我，收集结果的地方存在潜在的并发问题，原来我的考虑是在一个方法里创建的变量是在栈里面的，所以多线程并发时，创建的 <code>res</code> 对象是不一样的，所以没有线程安全问题，但是 CompletableFuture 处理是基于线程池的，即后面在方法内部再分发任务到  <code>executor</code>  中的工作线程（我没睡醒），由于此处使用的是线程不安全的集合类，所以 add 方法存在线程安全问题，解决方案是将问题行替换为：</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Collection<span style="color:#f92672">&lt;</span>R<span style="color:#f92672">&gt;</span> res <span style="color:#f92672">=</span> distinct <span style="color:#f92672">?</span> <span style="color:#66d9ef">new</span> ConcurrentHashSet<span style="color:#f92672">&lt;&gt;()</span> <span style="color:#f92672">:</span> <span style="color:#66d9ef">new</span> CopyOnWriteArrayList<span style="color:#f92672">&lt;&gt;();</span>
 </code></pre></div><p>其中因为 JDK 没有提供 ConcurrentHashSet 实现，此处的 ConcurrentHashSet 来自 hutool 工具包。</p>
-<p>然而改完之后，合代码到生产环境时，我还是有点心虚，因为我不确定为什么这样改就能高枕无忧了，先不管 List，在千千万万的博客文章中，人人都说 HashMap、HashSet、ArrayList 等等不是线程安全的，要使用相应的 JUC 包下的工具类，面试时被问到 “HashMap 和 ConcurrentHashMao 的区别” 时一定要答 “HashMap 是线程安全的，ConcurrentHashMao  是非线程安全的”，那么，先不说 ConcurrentHashMao 是怎么保证线程安全的，HashMap 在多线程并发的场景下会有什么问题呢？有人说可能会出现死循环，可能会导致 CPU 100%，可能会导致丢数据，那么真的是那样吗？如果是，又是怎么出现的呢？实践出真知，我们不妨自己来试试一一验证，而不是人云亦云。</p>
+<p>然而改完之后，合代码到生产环境时，我还是有点心虚，因为我不确定为什么这样改就能高枕无忧了，先不管 List，在千千万万的博客文章中，人人都说 HashMap、HashSet、ArrayList 等等不是线程安全的，要使用相应的 JUC 包下的工具类。周遭那些整天大喊 “进大厂必背的面试题” 中必然出现的一点是，被问到 “HashMap 和 ConcurrentHashMao 的区别” 时一定要答 “HashMap 是线程安全的，ConcurrentHashMao  是非线程安全的”，那么，先不说 ConcurrentHashMao 是怎么保证线程安全的，HashMap 在多线程并发的场景下会有什么问题呢？有人说可能会出现死循环，可能会导致 CPU 100%，可能会导致丢数据，那么真的是那样吗？如果是，又是怎么出现的呢？所谓实践出真知，我们不妨自己试着一一验证，而不是人云亦云。</p>
 <h3 id="一环境准备">一、环境准备</h3>
 <p>为了模拟多线程并发的场景，我需要在源码中进行判断和控制，所以我需要能够随意地修改 HashMap 的源码，但是 JDK 是只读的，那么怎么办呢？简单，把源码及相关的依赖复制出来就行，因为人们都说 JDK 8 的 HashMap 对大部分问题进行了修复，尽管它还不是线程安全的。那我们就一步步来，先看看 1.7 版本中会有什么问题，所以我搞了个 <a href="https://www.oracle.com/java/technologies/javase/javase7-archive-downloads.html">jdk-7u80</a> 中的哈希表源码抠了出来，并进行了修改，它和一些测试代码组成的完整的工程可见 <a href="https://github.com/cszxyang/jdk7-test/tree/master/src/com/github/cszxyang/jt/util/map">这里</a>。</p>
 <h3 id="二hashmap-的运作">二、<code>HashMap</code> 的运作</h3>
@@ -317,7 +317,7 @@ map<span style="color:#f92672">.</span><span style="color:#a6e22e">put</span><sp
     <span style="color:#66d9ef">return</span> h <span style="color:#f92672">^</span> <span style="color:#f92672">(</span>h <span style="color:#f92672">&gt;&gt;&gt;</span> 7<span style="color:#f92672">)</span> <span style="color:#f92672">^</span> <span style="color:#f92672">(</span>h <span style="color:#f92672">&gt;&gt;&gt;</span> 4<span style="color:#f92672">);</span>
 <span style="color:#f92672">}</span>
 </code></pre></div><p>另外，结合前面的 <code>put</code> 函数，如果 <code>e.hash == hash &amp;&amp; ((k = e.key) == key || key.equals(k))</code>，则认为该键对象已经存在，而不是认为发生哈希冲突，所以我还需够重写 equals 方法，</p>
-<p>因为默认地，所有对象的 equals 都继承自 Object 中的 equals 方法（比对堆地址），所以，如果一个类重写了 equals 方法，通过类的属性组合而不是地址作为对象的唯一性特征（即如果两个对象的各项特性一样，那么我们认为它们是 equals 的）时，那么新增元素会按照各个属性维度判断键值对是否已经存在，从而不往其中插入键一样的键值对，我们重写了 equals，那么往往还需要重写 hashCode 方法，通过对象的各个特性计算 hashCode，因为前面的 <code>e.hash == hash &amp;&amp; ((k = e.key) == key || key.equals(k))</code> 判断才会认为两个属性相同的对象可认为同一对象。总有人说，如果重写了类的 equals 方法，一定要重写 hashCode 方法，但是倘若这个类的对象不作为哈希表的键，那么这个所谓的 “准测” 看起来让人觉得十二分莫名其妙。</p>
+<p>因为默认地，所有对象的 equals 都继承自 Object 中的 equals 方法（比对堆地址），所以，如果一个类重写了 equals 方法，通过类的属性组合而不是地址作为对象的唯一性特征（即如果两个对象的各项特性一样，那么我们认为它们是 equals 的）时，那么新增元素会按照各个属性维度判断键值对是否已经存在，从而不往其中插入键一样的键值对，我们重写了 equals，那么往往还需要重写 hashCode 方法，结合对象的各个属性来计算 hashCode，因为前面的 <code>e.hash == hash &amp;&amp; ((k = e.key) == key || key.equals(k))</code> 判断才会认为两个属性相同的对象可认为同一对象。总有人说，如果重写了类的 equals 方法，一定要重写 hashCode 方法，但是倘若这个类的对象不作为哈希表的键，那么这个所谓的 “准测” 看起来让人觉得十二分莫名其妙。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">equals</span><span style="color:#f92672">(</span>Object obj<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
     <span style="color:#66d9ef">return</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">this</span> <span style="color:#f92672">==</span> obj<span style="color:#f92672">);</span>
 <span style="color:#f92672">}</span>
@@ -357,8 +357,8 @@ t2<span style="color:#f92672">.</span><span style="color:#a6e22e">setName</span>
 t2<span style="color:#f92672">.</span><span style="color:#a6e22e">start</span><span style="color:#f92672">();</span>
 t1<span style="color:#f92672">.</span><span style="color:#a6e22e">start</span><span style="color:#f92672">();</span>
 </code></pre></div><h3 id="四分析与测试">四、分析与测试</h3>
-<p>对于上面的场景，假设在 t1 时间点，线程 T2 进入扩容方法，它创建了一个新的数组，并尝试将旧数组中的数据搬运到新数组中，此时其时间片用完，上下文切换到另一个线程 T1。</p>
-<p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-03_11-47-37.png" alt="Snipaste_2021-06-03_11-47-37.png"></p>
+<p>对于上面的场景，因为线程 T1 启动后即进行了一秒休眠，记其后的某个 t1 时间点，线程 T2 先进入扩容方法，它创建了一个新的数组，并尝试将旧数组中的数据搬运到新数组中，此时其时间片用完，上下文切换到线程 T1 上。</p>
+<p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-10_10-13-20.png" alt="Snipaste_2021-06-03_11-47-37.png"></p>
 <p>为了模拟线程 T2 用完时间片，我们在它遍历 {d, dd} 这个节点的时候让它陷入休眠，注意此时它的栈空间中持有了 e 和 next 句柄指向。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">void</span> <span style="color:#a6e22e">transfer</span><span style="color:#f92672">(</span>Entry<span style="color:#f92672">[]</span> newTable<span style="color:#f92672">,</span> <span style="color:#66d9ef">boolean</span> rehash<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
     <span style="color:#66d9ef">int</span> newCapacity <span style="color:#f92672">=</span> newTable<span style="color:#f92672">.</span><span style="color:#a6e22e">length</span><span style="color:#f92672">;</span>
@@ -383,7 +383,7 @@ t1<span style="color:#f92672">.</span><span style="color:#a6e22e">start</span><s
 <span style="color:#f92672">}</span>
 </code></pre></div><p>接下来在 t2 时间段内，线程 T1 尝试放入  {e, ee}，同样地也会触发扩容，在 resize 方法中创建自己的新数组，然后进行数据搬运，让我们来看看数据搬运的过程：</p>
 <p>在遍历过程中，首先 e 和 next 分别指向 {d, dd} 和 {c, cc} 节点，然后 {d, dd} 和 {c, cc} 间的指针断开，{d, dd} 被拷贝到了新数组上，e 指针向前移动。</p>
-<p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-03_12-43-36.png" alt="Snipaste_2021-06-03_12-43-36.png"></p>
+<p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-10_10-14-55.png" alt="Snipaste_2021-06-03_12-43-36.png"></p>
 <p>经过多轮迭代，最后两个数组的情况如下所示：</p>
 <p><img src="https://golb.cc/images/java/jdk/hashmap/Snipaste_2021-06-03_12-50-03.png" alt="Snipaste_2021-06-03_12-50-03.png"></p>
 <p>假设在此时开始的 t3 时间内，线程 T1 失去时间片，线程 T2 苏醒并继续它未完成的任务，我们在 table 赋值的地方对线程 T1 进行休眠处理：</p>
