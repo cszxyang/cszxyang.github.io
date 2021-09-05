@@ -171,7 +171,7 @@
     <section class="post-content">
       <p>本文通过源码分析了解 JDK 1.7 的 ConcurrentHashMap 的实现原理。</p>
 <h3 id="一-简介">一. 简介</h3>
-<p>与 Hashtable 使用 synchronized 关键字对读写方法进行加锁不同，JDK 1.7 的 ConcurrentHashMap（以下简称 ConcurrentHashMap）使用了分段锁的思想，它将数据散列成一个 Segment 数组，每个 Segment 对象实际类似一个 HashMap，它们各自持有一个 HashEntry 数组，实际的键值对数据是存放到 HashEntry 数组中的，如果发生哈希冲突，则通过在 HashEntry 对象上构建链表存放哈希值一样的键值对，</p>
+<p>与 Hashtable 使用 synchronized 关键字对读写方法进行加锁不同，JDK 1.7 的 ConcurrentHashMap（以下简称 ConcurrentHashMap）使用了分段锁的思想，它将数据散列成一个 Segment 数组，每个 Segment 对象实际类似一个 HashMap，它们各自持有一个 HashEntry 数组，实际的键值对数据是存放到 HashEntry 数组中的，如果发生哈希冲突，则通过在 HashEntry 对象上构建链表存放哈希值一样的键值对。</p>
 <p>特别地，Segment 继承自 ReentrantLock，说明一个 Segment 就是一把锁，每个想要往 ConcurrentHashMap 写数据的线程都需要拿到相应分段的锁才行，而拿不到锁的线程，则需要重试与自旋，期间可以预先构建好需要的节点信息，然后如果有限次尝试后还是没能拿到锁，则会加入等待队列然后进行阻塞。</p>
 <h3 id="二-构造函数">二. 构造函数</h3>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#a6e22e">ConcurrentHashMap</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
