@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       ReentrantLock 源码分析 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" ReentrantLock 源码分析 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2021/08/19/reentrantlock-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2021-08-19T10:54:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    <meta property="og:article:tag" content="Java" />
+    
+    <meta property="og:article:tag" content="并发" />
+    
+    <meta property="og:article:tag" content="源码" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/highlight.css">
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/atom-one-dark.css">
+    
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+   
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2021/08/19/reentrantlock-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">ReentrantLock 源码分析</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">ReentrantLock 源码分析</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/java/">#Java</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E5%B9%B6%E5%8F%91/">#并发</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%BA%90%E7%A0%81/">#源码</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2021-08-19T10:54:24&#43;02:00">
+            2021/8/19
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文主要通过源码研究 <code>ReentrantLock </code> 的实现原理。</p>
+<p>前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 <code>ReentrantLock</code> 内部是怎么实现的。</p>
+<h3 id="一-简介">一. 简介</h3>
+<p><code>ReentrantLock</code> 顾名思义是一个可重入锁，它是基于 <code>AbstractQueuedSynchronizer</code> 实现的，支持公平锁和非公平锁机制。它实现了 <code>java.util.concurrent.locks.Lock</code> 以及 <code>java.io.Serializable</code> 接口。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">ReentrantLock</span> <span style="color:#66d9ef">implements</span> Lock<span style="color:#f92672">,</span> java<span style="color:#f92672">.</span><span style="color:#a6e22e">io</span><span style="color:#f92672">.</span><span style="color:#a6e22e">Serializable</span> <span style="color:#f92672">{</span>
+	<span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> Sync sync<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>它内部持有了一个 <code>Sync</code> 内部抽象类对象，加锁和解锁的逻辑转发具体的 <code>Sync</code> 子类方法上实现，有点类似 <code>Mybatis</code> 里面<code>Session</code> 与 <code>Executor</code> 间用到的门面设计模式。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">lock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    sync<span style="color:#f92672">.</span><span style="color:#a6e22e">lock</span><span style="color:#f92672">();</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">lockInterruptibly</span><span style="color:#f92672">()</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+    sync<span style="color:#f92672">.</span><span style="color:#a6e22e">acquireInterruptibly</span><span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryLock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">return</span> sync<span style="color:#f92672">.</span><span style="color:#a6e22e">nonfairTryAcquire</span><span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryLock</span><span style="color:#f92672">(</span><span style="color:#66d9ef">long</span> timeout<span style="color:#f92672">,</span> TimeUnit unit<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">return</span> sync<span style="color:#f92672">.</span><span style="color:#a6e22e">tryAcquireNanos</span><span style="color:#f92672">(</span>1<span style="color:#f92672">,</span> unit<span style="color:#f92672">.</span><span style="color:#a6e22e">toNanos</span><span style="color:#f92672">(</span>timeout<span style="color:#f92672">));</span>
+<span style="color:#f92672">}</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">unlock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    sync<span style="color:#f92672">.</span><span style="color:#a6e22e">release</span><span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+<span style="color:#75715e">// ......
+</span></code></pre></div><p><code>Sync</code> 其实是一个 <code>AbstractQueuedSynchronizer</code> 抽象实现，其中实现了<code>AbstractQueuedSynchronizer</code> 中的部分方法，其子类 <code>FairSync</code> 和 <code>NonfairSync</code> 也实现了部分方法，剩下的继承 <code>AbstractQueuedSynchronizer</code> 中的实现，下面是相关的类关系图。</p>
+<p><img src="https://golb.cc/images/java/jdk/concurrent/locks/Snipaste_2021-08-17_13-43-24.png" alt="Snipaste_2021-08-17_13-43-24.png"></p>
+<p>顾名思义，<code>NonfairSync</code> 是非公平锁实现，<code>FairSync</code> 是公平锁实现，而公平锁与非公平的区别只在当前线程获取锁是否需要排队这一判断，下面说到加锁的时候会提及。</p>
+<p>先看 <code>ReentrantLock</code> 的构造函数，默认会创建一个 <code>NonfairSync</code> 类型的 <code>Sync</code> 实现，也就是说 <code>ReentrantLock</code> 默认提供的是非公平锁。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#a6e22e">ReentrantLock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    sync <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> NonfairSync<span style="color:#f92672">();</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h3 id="二-非公平锁">二. 非公平锁</h3>
+<p>非公平锁获取锁时不需要考虑当前线程是否需要排队问题，任何尝试获取锁的线程都可以直接进行通过 <code>CAS</code> 操作，因为如果此刻有线程在排队，而后来者却可以先于它们获取到锁，即 ”先到不一定先得“，所以称之为非公平锁，这种机制可能导致 ”线程饿死“ 的情况出现，即排队的线程可能非常倒霉一直被人插队，自己一直拿不到锁，对应的任务也迟迟不能执行。</p>
+<h4 id="1-获取锁">1. 获取锁</h4>
+<p><code>NonfairSync</code> 中只重写了获取锁相关的方法，默认地，调用 <code>ReentrantLock</code> 的 lock 方法，将调用 <code>NonfairSync</code> 的 lock 方法，其中不会判断当前队列情况，而是在第一时间 <code>compareAndSetState</code> ，如果加锁成功，则当前线程成为独占线程。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">NonfairSync</span> <span style="color:#66d9ef">extends</span> Sync <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">lock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>compareAndSetState<span style="color:#f92672">(</span>0<span style="color:#f92672">,</span> 1<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+            setExclusiveOwnerThread<span style="color:#f92672">(</span>Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">currentThread</span><span style="color:#f92672">());</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">else</span> <span style="color:#f92672">{</span>
+            acquire<span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">protected</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryAcquire</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> acquires<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">return</span> nonfairTryAcquire<span style="color:#f92672">(</span>acquires<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>如果加锁失败，则会调用 <code>AbstractQueuedSynchronizer</code> 中的 <code>acquire</code> 模板方法，其中又会回调 <code>NonfairSync</code> 中的 <code>tryAcquire</code> 方法，而 <code>tryAcquire </code> 则会复用 <code>Sync</code> 中的 <code>nonfairTryAcquire</code> 方法。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">acquire</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> arg<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(!</span>tryAcquire<span style="color:#f92672">(</span>arg<span style="color:#f92672">)</span> <span style="color:#f92672">&amp;&amp;</span> acquireQueued<span style="color:#f92672">(</span>addWaiter<span style="color:#f92672">(</span>Node<span style="color:#f92672">.</span><span style="color:#a6e22e">EXCLUSIVE</span><span style="color:#f92672">),</span> arg<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+        selfInterrupt<span style="color:#f92672">();</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>所以实际的非公平尝试加锁逻辑在 <code>nonfairTryAcquire</code> ，其中主要的判断当前锁是否可获取</p>
+<ul>
+<li>如果是则尝试 <code>compareAndSetState</code>，将 state 从 0 改成 1 进行加锁</li>
+<li>如果锁已经被其他线程占有，则判断是否是当前线程占有的，是则重入</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">nonfairTryAcquire</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> acquires<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">final</span> Thread current <span style="color:#f92672">=</span> Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">currentThread</span><span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">int</span> c <span style="color:#f92672">=</span> getState<span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>c <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>compareAndSetState<span style="color:#f92672">(</span>0<span style="color:#f92672">,</span> acquires<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+            setExclusiveOwnerThread<span style="color:#f92672">(</span>current<span style="color:#f92672">);</span>
+            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>current <span style="color:#f92672">==</span> getExclusiveOwnerThread<span style="color:#f92672">())</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">int</span> nextc <span style="color:#f92672">=</span> c <span style="color:#f92672">+</span> acquires<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>nextc <span style="color:#f92672">&lt;</span> 0<span style="color:#f92672">)</span> <span style="color:#75715e">// overflow
+</span><span style="color:#75715e"></span>            <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> Error<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;Maximum lock count exceeded&#34;</span><span style="color:#f92672">);</span>
+        setState<span style="color:#f92672">(</span>nextc<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>如果加锁失败，则会执行 <code>AbstractQueuedSynchronizer</code> 的 acquire 方法中 <code>acquireQueued(addWaiter(Node.EXCLUSIVE), arg)</code> 代码，这块的执行过程在前面介绍 <code>AbstractQueuedSynchronizer</code> 时已经讲过，大概流程就是将当前线程节点化入队然后判断是否需要阻塞，是则将前继节点的 <code>waitSttatus</code> 改成 -1，然后自己阻塞。</p>
+<h4 id="2-释放锁">2. 释放锁</h4>
+<p>非公平锁释放锁调用的是 <code>AbstractQueuedSynchronizer</code> 中的模板方法 <code>release</code>，其中会回调 <code>Sync</code> 中的钩子函数 <code>tryRelease</code>，如果<code>tryRelease</code> 返回成功，表示释放锁成功，则会判断队列是否初始化，是的话则尝试唤醒队列中的第一个非哨兵非取消节点。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">release</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> arg<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>tryRelease<span style="color:#f92672">(</span>arg<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+        Node h <span style="color:#f92672">=</span> head<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>h <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> h<span style="color:#f92672">.</span><span style="color:#a6e22e">waitStatus</span> <span style="color:#f92672">!=</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            unparkSuccessor<span style="color:#f92672">(</span>h<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>再看 <code>release</code> 方法，逻辑比较简单，如果 state 被减为 0，则将独占线程指针置空返回 true。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">protected</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryRelease</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> releases<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">int</span> c <span style="color:#f92672">=</span> getState<span style="color:#f92672">()</span> <span style="color:#f92672">-</span> releases<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">currentThread</span><span style="color:#f92672">()</span> <span style="color:#f92672">!=</span> getExclusiveOwnerThread<span style="color:#f92672">())</span>
+        <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> IllegalMonitorStateException<span style="color:#f92672">();</span>
+    <span style="color:#66d9ef">boolean</span> free <span style="color:#f92672">=</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>c <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        free <span style="color:#f92672">=</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+        setExclusiveOwnerThread<span style="color:#f92672">(</span><span style="color:#66d9ef">null</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+    setState<span style="color:#f92672">(</span>c<span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">return</span> free<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h3 id="三-公平锁">三. 公平锁</h3>
+<p>公平锁加锁是直接调用 <code>AbstractQueuedSynchronizer</code> 的 acquire 方法，这样能复用入队和阻塞的逻辑，至于自己的定制化逻辑，则由钩子函数 <code>tryAcquire</code> 实现。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">FairSync</span> <span style="color:#66d9ef">extends</span> Sync <span style="color:#f92672">{</span>
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">lock</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        acquire<span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">protected</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryAcquire</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> acquires<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">final</span> Thread current <span style="color:#f92672">=</span> Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">currentThread</span><span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">int</span> c <span style="color:#f92672">=</span> getState<span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>c <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">if</span> <span style="color:#f92672">(!</span>hasQueuedPredecessors<span style="color:#f92672">()</span> <span style="color:#f92672">&amp;&amp;</span>
+                compareAndSetState<span style="color:#f92672">(</span>0<span style="color:#f92672">,</span> acquires<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+                setExclusiveOwnerThread<span style="color:#f92672">(</span>current<span style="color:#f92672">);</span>
+                <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+            <span style="color:#f92672">}</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>current <span style="color:#f92672">==</span> getExclusiveOwnerThread<span style="color:#f92672">())</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">int</span> nextc <span style="color:#f92672">=</span> c <span style="color:#f92672">+</span> acquires<span style="color:#f92672">;</span>
+            <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>nextc <span style="color:#f92672">&lt;</span> 0<span style="color:#f92672">)</span>
+                <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> Error<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;Maximum lock count exceeded&#34;</span><span style="color:#f92672">);</span>
+            setState<span style="color:#f92672">(</span>nextc<span style="color:#f92672">);</span>
+            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>与非公平锁不同，公平锁在 <code>tryAcquire</code> 中需要判断此刻是否有线程在排队，如果没有则直接 <code>CAS</code> 获取锁，获取成功则设置当前线程为独占线程，返回 true 结束；如果当前有线程在排队，则由于要实现公平，遵循先到先得原则，则当前线程也需要排队，所以直接返回 false，回到 <code>AbstractQueuedSynchronizer</code> 里面的 acquire 方法中执行 <code>acquireQueued(addWaiter(Node.EXCLUSIVE), arg)</code> 代码即可。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">hasQueuedPredecessors</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    Node t <span style="color:#f92672">=</span> tail<span style="color:#f92672">;</span> <span style="color:#75715e">// Read fields in reverse initialization order
+</span><span style="color:#75715e"></span>    Node h <span style="color:#f92672">=</span> head<span style="color:#f92672">;</span>
+    Node s<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">return</span> h <span style="color:#f92672">!=</span> t <span style="color:#f92672">&amp;&amp;</span>
+        <span style="color:#f92672">((</span>s <span style="color:#f92672">=</span> h<span style="color:#f92672">.</span><span style="color:#a6e22e">next</span><span style="color:#f92672">)</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">||</span> s<span style="color:#f92672">.</span><span style="color:#a6e22e">thread</span> <span style="color:#f92672">!=</span> Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">currentThread</span><span style="color:#f92672">());</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>hasQueuedPredecessors</code> 的判断极其复杂，需要考虑的场景有很多，在此先记住这个方法的返回值就如方法名所说的，如果返回 true，就表示有线程在等待，当前线程也要排队，否则说明没线程在排队，当前线程可以直接尝试获取锁。</p>
+<ol>
+<li>
+<p>返回 true，表示当前有线程在排队：</p>
+<ol>
+<li>
+<p><code>h != t &amp;&amp; (s = h.next) == null</code>：队列已经初始化，但是不存在非哨兵节点，可能的情况是：第一个非哨兵节点在 <code>enq·</code>方法入队时初始化哨兵节点，将 head 指向哨兵节点，但是还没有将 tail 指向哨兵，也还没将当前线程所在节点追加到其后。这种情况可以认为有其他线程在排队了，所以返回 true。</p>
+<p><img src="https://golb.cc/images/java/jdk/concurrent/locks/Snipaste_2021-08-17_19-30-22.png" alt="Snipaste_2021-08-17_19-30-22.png"></p>
+</li>
+<li>
+<p><code>h != t &amp;&amp; s.thread != Thread.currentThread()</code>：队列已经初始化，并且哨兵的后继节点不是当前节点，因为有其他线程在排队，所以返回 true。</p>
+</li>
+</ol>
+</li>
+<li>
+<p>返回 false，表示当前没有有线程在排队：</p>
+<ol>
+<li>h == t：
+<ol>
+<li>队列没有初始化，h 和 t 都为 null，返回 false，如果 <code>CAS</code> 还能省掉初始化队列的操作。</li>
+<li>队列初始化了，但是 h 和 t 都指向一个节点，这种情况只能是都指向哨兵节点，有可能是队列已经初始化了一段时间，排队的节点陆续出队，最后只剩下哨兵节点，由于不存在其他非哨兵节点，所以不需要排队，返回 false。</li>
+</ol>
+</li>
+<li><code>h != t &amp;&amp; ((s = h.next) != null &amp;&amp; s.thread == Thread.currentThread())</code>：队列已经初始化，并且哨兵的后继节点不为空，并且后继节点的线程是当前线程，说明当前线程已经在排队，那么就不需要再排队，直接调用 <code>CAS</code> 获取锁。</li>
+</ol>
+</li>
+</ol>
+<p>上面是公平锁加锁的大致过程，至于解锁过程则和非公平锁是一样，都是复用 <code>Sync</code> 中的 <code>release</code> 方法。</p>
+<h3 id="四-qa">四. Q&amp;A</h3>
+<h4 id="1-hasqueuedpredecessors-当线程发现自己在排队是什么场景会添加重复节点吗">1. <code>hasQueuedPredecessors</code> 当线程发现自己在排队是什么场景？会添加重复节点吗？</h4>
+<p>在 <code>hasQueuedPredecessors</code> 中存在一种情况是，当满足 <code>h != t &amp;&amp; ((s = h.next) != null &amp;&amp; s.thread == Thread.currentThread())</code> 时，将会返回 false，说明队列中只有当前线程在排队，不需要等待，直接尝试 <code>CAS</code>，那么队列中是不是会有两个当前线程的节点呢？</p>
+<p>我在网上看到 <a href="https://blog.csdn.net/anlian523/article/details/106173860">这篇文章</a>，这个问题便出自其中，但是我看这个交流，我感到疑惑，首先当第一个非哨兵节点被唤醒时，它是不可能 <code>CAS</code> 失败的，因为这是公平锁，不可能存在其他线程与之竞争，由此我感觉楼主的解答有问题，但是我自己也产生了一个疑问，到底什么场景下一个线程进入<code> hasQueuedPredecessors</code> 方法会发现自己在排队呢？</p>
+<p><img src="https://golb.cc/images/java/jdk/concurrent/locks/Snipaste_2021-08-17_22-37-59.png" alt="Snipaste_2021-08-17_22-37-59.png"></p>
+<p>带着疑问看到 <a href="https://programmer.ink/think/the-meaning-of-hasqueuedpredecessors-method-and-head-node-of-reentrantlock-class.html">国外的一篇文章</a> 讲得挺合理，其实该场景并不复杂，由于节点化线程入队后会在 <code>acquireQueued</code> 方法入队，如果入队后发现其前继节点不是哨兵节点，则会阻塞，当某个时刻它被唤醒，此时前继节点便是 head，说明它是第一个非哨兵节点，便会调用 <code>tryAcquire</code>，进入 <code>hasQueuedPredecessors</code> 方法。</p>
+<p>此时进入<code>hasQueuedPredecessors</code> 中 <code>h != t &amp;&amp; ((s = h.next) != null &amp;&amp; s.thread == Thread.currentThread())</code> 便会发现当前节点满足该条件，然后 <code>CAS</code> 便会成功。</p>
+<p><img src="https://golb.cc/images/java/jdk/concurrent/locks/Snipaste_2021-08-17_20-12-43.png" alt="img"></p>
+<p>所以我的理解是，<code>s.thread == Thread.currentThread()</code> 这个判断就是针对第一个非哨兵节点的，如果它被唤醒，那么它就不用再排队了，毕竟排了半天才轮到它，怎么可能还需要继续排队呢，所以它就能拿到锁，至于后面的是否入队的问题就更加不存在了。</p>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+      <span class="readmore-prev readmore-meta">PREV: <a href="https://golb.cc/blog/2021/08/22/countdownlatch-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/"><h4>CountDownLatch 源码分析</h4></a></span>
+      
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2021/08/18/abstractqueuedsynchronizer-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/"><h4>AbstractQueuedSynchronizer 源码分析</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+

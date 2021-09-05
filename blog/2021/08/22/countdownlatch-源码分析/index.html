@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <title>
+       CountDownLatch 源码分析 &middot;  cszxyang
+    </title>
+
+    
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta property="og:title" content=" CountDownLatch 源码分析 &middot;  cszxyang" />
+  	<meta property="og:site_name" content="cszxyang" />
+  	<meta property="og:url" content="https://golb.cc/blog/2021/08/22/countdownlatch-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" />
+
+    
+  	<meta property="og:type" content="article" />
+    <meta property="og:article:published_time" content="2021-08-22T10:54:24&#43;02:00" />
+    
+    <meta property="og:article:tag" content="技术" />
+    
+    <meta property="og:article:tag" content="Java" />
+    
+    <meta property="og:article:tag" content="并发" />
+    
+    <meta property="og:article:tag" content="源码" />
+    
+    
+
+    <meta name="description" content="一路同步，静心记录。" />
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="https://golb.cc/images/favicon.ico">
+	  <link rel="apple-touch-icon" href="https://golb.cc/images/apple-touch-icon.png" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/screen.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/nav.css" />
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/hugo.css" />
+
+    
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/highlight.css">
+    <link rel="stylesheet" type="text/css" href="https://golb.cc/css/atom-one-dark.css">
+    
+    
+    <script src="https://golb.cc/js/highlight.js"></script>
+    <script type="text/javascript">hljs.initHighlightingOnLoad();</script>
+   
+    
+   <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8ee45840325e1a8c8d1bdc689ea4d279";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+   </script>
+
+
+    
+    
+
+    
+
+    <link rel="canonical" href="https://golb.cc/blog/2021/08/22/countdownlatch-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" />
+
+    
+</head>
+<body class="nav-closed">
+
+  <div class="nav">
+    <h3 class="nav-title">Menu</h3>
+    <a href="#" class="nav-close">
+        <span class="hidden">Close</span>
+    </a>
+    <ul>
+        
+
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/">首页</a>
+            </li>
+        
+            
+            <li class="nav-opened" role="presentation">
+            	<a href="https://golb.cc/about">关于</a>
+            </li>
+        
+
+        <li class="nav-opened" role="presentation"><a href=""></a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/技术/">技术</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/生活/">生活</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/随想/">随想</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/翻译/">翻译</a></li>
+        <li class="nav-opened" role="presentation"><a href="https://golb.cc/tags/笔记/">笔记</a></li>
+    </ul>
+
+    
+    
+
+    
+</div>
+<span class="nav-cover"></span>
+
+
+ <div class="site-wrapper">
+
+
+
+
+  <header class="main-header post-head" style="background-image: url(https://www.bing.com/ImageResolution.aspx?w=1366&amp;h=768)">
+  
+
+    <nav class="main-nav overlay clearfix">
+    
+        
+    
+    
+        <a class="menu-button" href="#"><span class="burger">&#9776;</span><span class="word">菜单</span></a>
+    
+</nav>
+
+    <div class="vertical">
+        <div class="main-header-content inner">
+            <h1 class="page-title">CountDownLatch 源码分析</h1>
+            <h2 class="page-description">cszxyang</h2> <br/>
+            
+    <a class="bloglogo" href="https://github.com/cszxyang" target="_blank">
+    <span class="icon-github" style="color:white;font-size:2em"></span>
+    </a>
+&nbsp;
+
+
+
+
+
+
+        </div>
+    </div>
+</header>
+
+
+
+<main class="content" role="main">
+  <article class="post post">
+
+    <header class="post-header">
+        <h1 class="post-title">CountDownLatch 源码分析</h1>
+        
+
+        <section class="post-meta">
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%8A%80%E6%9C%AF/">#技术</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/java/">#Java</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E5%B9%B6%E5%8F%91/">#并发</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+          <span class="post-tag small"><a href="https://golb.cc/tags/%E6%BA%90%E7%A0%81/">#源码</a>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        
+        &nbsp;&nbsp;
+        
+          <time class="post-date" datetime="2021-08-22T10:54:24&#43;02:00">
+            2021/8/22
+          </time>
+        
+        </section>
+        <br/>
+    </header>
+
+    <section class="post-content">
+      <p>本文通过源码分析了解 JDK CountDownLatch  的实现原理。</p>
+<p>前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。</p>
+<h3 id="一源码文档">一、源码文档</h3>
+<p><code>Doug Lea</code> 对 <code>CountDownLatch</code> 做了如下定义：</p>
+<blockquote>
+<p>A synchronization aid that allows one or more threads to wait until a set of operations being performed in other threads completes.</p>
+</blockquote>
+<p>意思是这是一个允许一个或多个线程等待一批线程里的操作完成的同步化工具，按我理解这是一个异步转同步的工具，即可以理解成有一个负责分发任务线程，将一批任务分发给多个线程异步执行然后自己阻塞，直到异步线程全都执行完，然后任务分发线程被唤醒再继续往下执行。</p>
+<blockquote>
+<p>CountDownLatch is initialized with a given count.The await methods block until the current count reaches zero due to invocations of the countDown method, after which all waiting threads are released and any subsequent invocations of await return immediately.  This is a one-shot phenomenon &ndash; the count cannot be reset.  If you need a version that resets the count, consider using a CyclicBarrier.</p>
+</blockquote>
+<p>使用 <code>CountDownLatch</code> 时都需要先指定一个数量 count，调用 await 方法的线程将会阻塞直到 count  经过 <code>countDown</code> 方法将之减到 0，在此之后所有等待的线程都会被唤醒，并立即从 await 方法返回。因为 await  方法实际上是一个获取锁的操作，但是由于锁是共享的，所以此后任何线程都可以获取到锁，并且不需要考虑释放，所以 <code>CountDownLatch</code> 是一次性的，因为 count 不能被重置，如果需要复用 count，可以看看 <code>CyclicBarrier</code>。</p>
+<blockquote>
+<p>A CountDownLatch is a versatile synchronization tool and can be used for a number of purposes.  A CountDownLatch initialized with a count of one serves as a simple on/off latch, or gate: all threads invoking await wait at the gate until it is opened by a thread invoking countDown. A CountDownLatch initialized to N can be used to make one thread wait until N threads have completed some action, or some action has been completed N times.</p>
+</blockquote>
+<p><code>CountDownLatch</code> 有很多用途，count 可以作为一个开关，或者把它理解成一道门，所以调用 await  的线程都在门开启。对于初始化 count 为 N 的 <code>CountDownLatch</code> ，可以让一个线程等待 N 条线程完成或者一个操作完成 N 次。</p>
+<blockquote>
+<p>A useful property of a CountDownLatch is that it doesn&rsquo;t require that threads calling countDown wait for the count to reach zero before proceeding, it simply prevents any thread from proceeding past an await until all threads could pass.</p>
+</blockquote>
+<p><code>CountDownLatch</code> 有个特性是，调用 <code>countDown</code> 方法的线程不需要等到 count 变为 0 才继续往下执行，它只会阻塞调用 await 的线程，让它等待所有的线程返回可通过的信号（通过 <code>countDown</code>）。</p>
+<h4 id="使用示例">使用示例</h4>
+<p><code>Doug Lea</code> 还给出了以下使用示例，比如：有一个 Driver 类，意为驱动线程，用来调度工作线程的执行，其中定义了两个 <code>CountDownLatch</code> ，第一个是一个启动信号，为了避免工作线程在驱动线程还没准备好的情况下执行。第二个 <code>CountDownLatch</code> 是一个完成信号，用于使驱动线程阻塞等待所有工作线程作业完成。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Driver</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">int</span> N <span style="color:#f92672">=</span> 5<span style="color:#f92672">;</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+        CountDownLatch startSignal <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CountDownLatch<span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+        CountDownLatch doneSignal <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CountDownLatch<span style="color:#f92672">(</span>N<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> 0<span style="color:#f92672">;</span> i <span style="color:#f92672">&lt;</span> N<span style="color:#f92672">;</span> <span style="color:#f92672">++</span>i<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">new</span> Thread<span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> Worker<span style="color:#f92672">(</span>startSignal<span style="color:#f92672">,</span> doneSignal<span style="color:#f92672">)).</span><span style="color:#a6e22e">start</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#75715e">// don&#39;t let run yet
+</span><span style="color:#75715e"></span>        doSomethingElse<span style="color:#f92672">();</span> 
+        <span style="color:#75715e">// let all threads proceed
+</span><span style="color:#75715e"></span>        startSignal<span style="color:#f92672">.</span><span style="color:#a6e22e">countDown</span><span style="color:#f92672">();</span>      
+        doSomethingElse<span style="color:#f92672">();</span>
+        <span style="color:#75715e">// wait for all to finish
+</span><span style="color:#75715e"></span>        doneSignal<span style="color:#f92672">.</span><span style="color:#a6e22e">await</span><span style="color:#f92672">();</span>           
+    <span style="color:#f92672">}</span>
+
+    <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">doSomethingElse</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;do sth else&#34;</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>在 Worker 中需要等待驱动线程在 <code>startSignal</code> 上调用  <code>countDown</code> 发出启动信号才能往下执行任务，有点像是百米竞跑的枪声一样。各自操作完成在发出完成信号，等所有线程都发出信号则驱动线程可以继续执行。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Worker</span> <span style="color:#66d9ef">implements</span> Runnable <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> CountDownLatch startSignal<span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> CountDownLatch doneSignal<span style="color:#f92672">;</span>
+    
+    Worker<span style="color:#f92672">(</span>CountDownLatch startSignal<span style="color:#f92672">,</span> CountDownLatch doneSignal<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">startSignal</span> <span style="color:#f92672">=</span> startSignal<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">doneSignal</span> <span style="color:#f92672">=</span> doneSignal<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    
+    <span style="color:#a6e22e">@Override</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">run</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+            startSignal<span style="color:#f92672">.</span><span style="color:#a6e22e">await</span><span style="color:#f92672">();</span>
+            doWork<span style="color:#f92672">();</span>
+            doneSignal<span style="color:#f92672">.</span><span style="color:#a6e22e">countDown</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>InterruptedException ex<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;catch ex&#34;</span><span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+    
+    <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">doWork</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;doWork&#34;</span><span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>CountDownLatch</code> 的另一种用法是将问题分解成 N 份，每份对应一个 Runnable 任务，每个任务处理问题分区，并且将所有的任务丢人线程池里调度，执行完后进行 <code>countDown</code>。当所有的子任务执行完，<code>Driver2</code> 就可以继续往下执行。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#f92672">import</span> java.util.concurrent.*<span style="color:#f92672">;</span>
+
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Driver2</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">int</span> N <span style="color:#f92672">=</span> 5<span style="color:#f92672">;</span>
+
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+        CountDownLatch doneSignal <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CountDownLatch<span style="color:#f92672">(</span>N<span style="color:#f92672">);</span>
+        ThreadPoolExecutor executor <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> ThreadPoolExecutor<span style="color:#f92672">(</span>
+                N<span style="color:#f92672">,</span> 20<span style="color:#f92672">,</span> 0L<span style="color:#f92672">,</span> 
+                TimeUnit<span style="color:#f92672">.</span><span style="color:#a6e22e">MILLISECONDS</span><span style="color:#f92672">,</span> <span style="color:#66d9ef">new</span> LinkedBlockingDeque<span style="color:#f92672">&lt;&gt;(</span>500<span style="color:#f92672">),</span> 
+                r <span style="color:#f92672">-&gt;</span> <span style="color:#66d9ef">new</span> Thread<span style="color:#f92672">(</span>r<span style="color:#f92672">,</span> <span style="color:#e6db74">&#34;executor&#34;</span><span style="color:#f92672">));</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> 0<span style="color:#f92672">;</span> i <span style="color:#f92672">&lt;</span> N<span style="color:#f92672">;</span> <span style="color:#f92672">++</span>i<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            executor<span style="color:#f92672">.</span><span style="color:#a6e22e">execute</span><span style="color:#f92672">(</span><span style="color:#66d9ef">new</span> WorkerRunnable<span style="color:#f92672">(</span>doneSignal<span style="color:#f92672">,</span> i<span style="color:#f92672">));</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#75715e">// wait for all to finish
+</span><span style="color:#75715e"></span>        doneSignal<span style="color:#f92672">.</span><span style="color:#a6e22e">await</span><span style="color:#f92672">();</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h3 id="二源码分析">二、源码分析</h3>
+<p>通常使用 <code>CountDownLatch</code> 都需要在构造函数中指定一个数值，并赋值给同步状态 state。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#a6e22e">CountDownLatch</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> count<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>count <span style="color:#f92672">&lt;</span> 0<span style="color:#f92672">)</span> <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> IllegalArgumentException<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;count &lt; 0&#34;</span><span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">this</span><span style="color:#f92672">.</span><span style="color:#a6e22e">sync</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> Sync<span style="color:#f92672">(</span>count<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>CountDownLatch</code> 是基于 <code>AbstractQueuedSynchronizer</code> 的共享锁机制的，其中定义了 <code>AbstractQueuedSynchronizer</code> 的实现类 <code>Sync</code>，Sync 的构造函数必须指定一个 int 类型的数值，用于表示共享锁的线程数，或者可以理解成锁个数，通过指定该值调用 <code>CAS</code>  进行加锁。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">private</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Sync</span> <span style="color:#66d9ef">extends</span> AbstractQueuedSynchronizer <span style="color:#f92672">{</span>
+    Sync<span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> count<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        setState<span style="color:#f92672">(</span>count<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">int</span> <span style="color:#a6e22e">getCount</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">return</span> getState<span style="color:#f92672">();</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>既然使用了共享锁，自然地 <code>Sync</code> 中覆盖了 <code>tryAcquireShared</code> 和 <code>tryReleaseShared</code> 方法。<code>tryAcquireShared</code> 方法用于判断锁是否被其他线程持有，是则获取失败。因为 <code>CountDownLatch</code> 使用上指定了锁以及对应可持有线程数，后面再有线程来进行加锁则只能阻塞，直到共享锁的线程全部释放锁。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">protected</span> <span style="color:#66d9ef">int</span> <span style="color:#a6e22e">tryAcquireShared</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> acquires<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">return</span> <span style="color:#f92672">(</span>getState<span style="color:#f92672">()</span> <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">?</span> 1 <span style="color:#f92672">:</span> <span style="color:#f92672">-</span>1<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>每次有一个线程释放锁，<code>AQS</code> 里面的 state 字段就会减 1，如果 state 减为 0，则表示该锁完全释放，其他线程可以尝试获取锁。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">protected</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">tryReleaseShared</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> releases<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#75715e">// Decrement count; signal when transition to zero
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">for</span> <span style="color:#f92672">(;;)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">int</span> c <span style="color:#f92672">=</span> getState<span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>c <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span>
+            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">int</span> nextc <span style="color:#f92672">=</span> c<span style="color:#f92672">-</span>1<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>compareAndSetState<span style="color:#f92672">(</span>c<span style="color:#f92672">,</span> nextc<span style="color:#f92672">))</span>
+            <span style="color:#66d9ef">return</span> nextc <span style="color:#f92672">==</span> 0<span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h4 id="1-countdown-过程">1. <code>countDown</code> 过程</h4>
+<p><code>countDown</code> 方法调用的是 <code>AbstractOwnableSynchronizer</code> 里面的 <code>releaseShared</code> 模板方法，注意调用 <code>CountDownLatch</code> 构造就已经上了 N 层锁了（关门），而 <code>countDown</code> 就是一个加锁的过程（开门）。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">countDown</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    sync<span style="color:#f92672">.</span><span style="color:#a6e22e">releaseShared</span><span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>releaseShared</code>  方法中会回调 <code>Sync</code> 中的钩子函数 <code>tryReleaseShared</code>，当 N 层锁都被释放时，整个锁被释放，<code>tryReleaseShared</code> 才返回 true，其他线程才能来获取锁并返回 true，否则都是返回 false（貌似不关心这个返回值，但是方法语义上是这样定义的）</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">boolean</span> <span style="color:#a6e22e">releaseShared</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> arg<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>tryReleaseShared<span style="color:#f92672">(</span>arg<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+        doReleaseShared<span style="color:#f92672">();</span>
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>再看 <code>doReleaseShared</code> 方法，当 N 层锁都被释放时，将会进入该方法，其中主要的判断:</p>
+<ul>
+<li>如果队列为空，判断哨兵的等待状态，如果是 0，则唤醒其后继节点，注意如果唤醒失败就 continue，但是唤醒成功仍然没有跳出循环，这时我们转换到 <code>AQS</code> 中线程阻塞的地方 <code>acquireQueued</code> 方法，第一个非哨兵非取消节点被唤醒，并将原头节点删除，所以下面的代码的当下一轮迭代进来时将会继续往后唤醒线程，直到整个队列为空。注意最后一个 <code>h == head</code> 判断，如果 <code>unpark</code> 唤醒的后继节点获取锁成功，那么头节点将会发生变化，则会再继续唤醒下一个节点，否则就会退出这里的循环，不再唤醒后面的节点。</li>
+<li>如果队列为空，则结束。</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">private</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">doReleaseShared</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">for</span> <span style="color:#f92672">(;;)</span> <span style="color:#f92672">{</span>
+        Node h <span style="color:#f92672">=</span> head<span style="color:#f92672">;</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>h <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> h <span style="color:#f92672">!=</span> tail<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">int</span> ws <span style="color:#f92672">=</span> h<span style="color:#f92672">.</span><span style="color:#a6e22e">waitStatus</span><span style="color:#f92672">;</span>
+            <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>ws <span style="color:#f92672">==</span> Node<span style="color:#f92672">.</span><span style="color:#a6e22e">SIGNAL</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">if</span> <span style="color:#f92672">(!</span>compareAndSetWaitStatus<span style="color:#f92672">(</span>h<span style="color:#f92672">,</span> Node<span style="color:#f92672">.</span><span style="color:#a6e22e">SIGNAL</span><span style="color:#f92672">,</span> 0<span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+                    <span style="color:#66d9ef">continue</span><span style="color:#f92672">;</span>            <span style="color:#75715e">// loop to recheck cases
+</span><span style="color:#75715e"></span>                <span style="color:#f92672">}</span>
+                unparkSuccessor<span style="color:#f92672">(</span>h<span style="color:#f92672">);</span>
+            <span style="color:#f92672">}</span>
+            <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>ws <span style="color:#f92672">==</span> 0 <span style="color:#f92672">&amp;&amp;</span> <span style="color:#f92672">!</span>compareAndSetWaitStatus<span style="color:#f92672">(</span>h<span style="color:#f92672">,</span> 0<span style="color:#f92672">,</span> Node<span style="color:#f92672">.</span><span style="color:#a6e22e">PROPAGATE</span><span style="color:#f92672">))</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">continue</span><span style="color:#f92672">;</span>                <span style="color:#75715e">// loop on failed CAS
+</span><span style="color:#75715e"></span>            <span style="color:#f92672">}</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#75715e">// loop if head changed
+</span><span style="color:#75715e"></span>        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>h <span style="color:#f92672">==</span> head<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">break</span><span style="color:#f92672">;</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h4 id="2-await-过程">2. <code>await</code> 过程</h4>
+<p>await 方法会调用 <code>AbstractQueuedSynchronizer</code> 中的模板方法 <code>acquireSharedInterruptibly</code>，想想 <code>CountDownLatch</code> 的作用，它是一扇门，那么在工作线程没有 <code>countDown</code> 前，将要把调度线程阻塞，而且这个阻塞可唤醒，那么回顾 <code>AbstractQueuedSynchronizer</code> 及结合 <code>countDown</code> 是一个释放锁的过程，我们不难想到 await 其实是一个请求锁的过程。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">await</span><span style="color:#f92672">()</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+    sync<span style="color:#f92672">.</span><span style="color:#a6e22e">acquireSharedInterruptibly</span><span style="color:#f92672">(</span>1<span style="color:#f92672">);</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>acquireSharedInterruptibly</code> 首先会回调 <code>CountDownLatch</code> 中的钩子函数 <code>tryAcquireShared</code>，<code>tryAcquireShared</code>  只判断当前 state 是否为 0，也就是 N 层锁是否都已释放，是则返回 1 ，否则返回 -1，如果 N 层锁没完全释放则会继续调用 <code>doAcquireSharedInterruptibly</code>，它是 <code>AbstractQueuedSynchronizer</code>  中一个私有方法，并且只在此处被调用，其实它相当于 <code>AbstractQueuedSynchronizer</code>  中的 <code>acquire</code> 方法的 <code>acquireQueued(addWaiter(Node.EXCLUSIVE), arg)</code> 这段代码的作用。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">acquireSharedInterruptibly</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> arg<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> InterruptedException <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>Thread<span style="color:#f92672">.</span><span style="color:#a6e22e">interrupted</span><span style="color:#f92672">())</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> InterruptedException<span style="color:#f92672">();</span>
+    <span style="color:#f92672">}</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>tryAcquireShared<span style="color:#f92672">(</span>arg<span style="color:#f92672">)</span> <span style="color:#f92672">&lt;</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        doAcquireSharedInterruptibly<span style="color:#f92672">(</span>arg<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p><code>doAcquireSharedInterruptibly</code> 主要经过以下几个步骤：</p>
+<ol>
+<li>节点化当前线程并入队</li>
+<li>如果当前节点的前继节点是哨兵，则去看 N 层锁是否都释放，是的话会返回 1，即 r = 1，然后继续调用 <code>setHeadAndPropagate</code> 方法，<code>setHeadAndPropagate</code> 比较复杂，主要的作用是将等待队列中此刻在等待的线程逐一唤醒去获取锁。
+注意下面方法获取锁调用的是 <code>Sync</code> 中的 <code>tryAcquireShared</code> 方法，但是与 <code>acquireQueued</code> 方法不同，它并没有通过调用 <code>CAS</code> 方法改变 state 的值，所以不同担心 state  的整型越界问题。</li>
+<li>如果当前节点的前继节点不是哨兵。则处理方式与 <code>acquireQueued</code>  方法一样，主要将前继节点的等待状态记为 -1，然后阻塞。</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">private</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">doAcquireSharedInterruptibly</span><span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> arg<span style="color:#f92672">)</span> <span style="color:#66d9ef">throws</span> InteinrruptedException <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">final</span> Node node <span style="color:#f92672">=</span> addWaiter<span style="color:#f92672">(</span>Node<span style="color:#f92672">.</span><span style="color:#a6e22e">SHARED</span><span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">boolean</span> failed <span style="color:#f92672">=</span> <span style="color:#66d9ef">true</span><span style="color:#f92672">;</span>
+    <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(;;)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">final</span> Node p <span style="color:#f92672">=</span> node<span style="color:#f92672">.</span><span style="color:#a6e22e">predecessor</span><span style="color:#f92672">();</span>
+            <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>p <span style="color:#f92672">==</span> head<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">int</span> r <span style="color:#f92672">=</span> tryAcquireShared<span style="color:#f92672">(</span>arg<span style="color:#f92672">);</span>
+                <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>r <span style="color:#f92672">&gt;=</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                    setHeadAndPropagate<span style="color:#f92672">(</span>node<span style="color:#f92672">,</span> r<span style="color:#f92672">);</span>
+                    p<span style="color:#f92672">.</span><span style="color:#a6e22e">next</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span> <span style="color:#75715e">// help GC
+</span><span style="color:#75715e"></span>                    failed <span style="color:#f92672">=</span> <span style="color:#66d9ef">false</span><span style="color:#f92672">;</span>
+                    <span style="color:#66d9ef">return</span><span style="color:#f92672">;</span>
+                <span style="color:#f92672">}</span>
+            <span style="color:#f92672">}</span>
+            <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>shouldParkAfterFailedAcquire<span style="color:#f92672">(</span>p<span style="color:#f92672">,</span> node<span style="color:#f92672">)</span> <span style="color:#f92672">&amp;&amp;</span> parkAndCheckInterrupt<span style="color:#f92672">())</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">throw</span> <span style="color:#66d9ef">new</span> InterruptedException<span style="color:#f92672">();</span>
+            <span style="color:#f92672">}</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span> <span style="color:#66d9ef">finally</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>failed<span style="color:#f92672">)</span>
+            cancelAcquire<span style="color:#f92672">(</span>node<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><h3 id="三常见问题">三、常见问题</h3>
+<p>下面对于 <code>CountDownLatch</code> 的使用中遇到的一些问题进行总结。</p>
+<h4 id="1-线程没有正常-countdown">1. 线程没有正常 <code>countDown</code></h4>
+<p>假设下面有三条线程，其中 <code>t3</code> 中会抛出异常，从而导致后面代码中的 <code>countDown</code> 代码没有执行到，从而导致调度线程没有正常释放。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#f92672">import</span> java.util.concurrent.TimeUnit<span style="color:#f92672">;</span>
+
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">App</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">static</span> CountDownLatch latch <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CountDownLatch<span style="color:#f92672">(</span>3<span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">main</span><span style="color:#f92672">(</span>String<span style="color:#f92672">[]</span> args<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">for</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> 1<span style="color:#f92672">;</span> i <span style="color:#f92672">&lt;</span> 4<span style="color:#f92672">;</span> i<span style="color:#f92672">++)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">final</span> <span style="color:#66d9ef">int</span> finalI <span style="color:#f92672">=</span> i<span style="color:#f92672">;</span>
+            Thread thread <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> Thread<span style="color:#f92672">(()</span> <span style="color:#f92672">-&gt;</span> <span style="color:#f92672">{</span>
+                <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+                    System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;Thread-&#34;</span> <span style="color:#f92672">+</span> finalI <span style="color:#f92672">+</span>  <span style="color:#e6db74">&#34; is running&#34;</span><span style="color:#f92672">);</span>
+                    TimeUnit<span style="color:#f92672">.</span><span style="color:#a6e22e">MILLISECONDS</span><span style="color:#f92672">.</span><span style="color:#a6e22e">sleep</span><span style="color:#f92672">(</span>finalI <span style="color:#f92672">*</span> 1000<span style="color:#f92672">);</span>
+                    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>finalI <span style="color:#f92672">==</span> 3<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                        <span style="color:#66d9ef">int</span> num <span style="color:#f92672">=</span> 1 <span style="color:#f92672">/</span> 0<span style="color:#f92672">;</span>
+                    <span style="color:#f92672">}</span>
+                    latch<span style="color:#f92672">.</span><span style="color:#a6e22e">countDown</span><span style="color:#f92672">();</span>
+                <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>InterruptedException e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                    e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+                <span style="color:#f92672">}</span> <span style="color:#66d9ef">finally</span> <span style="color:#f92672">{</span>
+                    <span style="color:#75715e">// latch.countDown();
+</span><span style="color:#75715e"></span>                <span style="color:#f92672">}</span>
+            <span style="color:#f92672">});</span>
+            thread<span style="color:#f92672">.</span><span style="color:#a6e22e">setName</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;t&#34;</span> <span style="color:#f92672">+</span> finalI<span style="color:#f92672">);</span>
+            thread<span style="color:#f92672">.</span><span style="color:#a6e22e">start</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">long</span> start <span style="color:#f92672">=</span> System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">();</span>
+            latch<span style="color:#f92672">.</span><span style="color:#a6e22e">await</span><span style="color:#f92672">();</span>
+            System<span style="color:#f92672">.</span><span style="color:#a6e22e">out</span><span style="color:#f92672">.</span><span style="color:#a6e22e">println</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;阻塞耗时 &#34;</span> <span style="color:#f92672">+</span> <span style="color:#f92672">(</span>System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">()</span> <span style="color:#f92672">-</span> start<span style="color:#f92672">)</span> <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34; ms &#34;</span><span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            e<span style="color:#f92672">.</span><span style="color:#a6e22e">printStackTrace</span><span style="color:#f92672">();</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>我们看到输出是这样的，main 线程进入等待队列后一直处于阻塞状态，并切这种状况是外部无法干预的，其后的代码也一直无法执行到。所以一般来说使用 CountDownLatch 时需要在 finally 中调用 countDown 方法，以保证各个子锁都能释放，要不然调度线程会一直阻塞。</p>
+<pre><code>Thread-1 is running
+main阻塞, head: [-1,null] =&gt; [0,main]
+Thread-2 is running
+Thread-3 is running
+Exception in thread &quot;t3&quot; java.lang.ArithmeticException: / by zero
+	at App1.lambda$main$0(App1.java:14)
+	at java.lang.Thread.run(Thread.java:748)
+</code></pre><h4 id="2-count-数大于-countdown-的线程数">2. count 数大于 <code>countDown</code> 的线程数</h4>
+<p>如果把 <code>App</code> 中的代码 <code>static CountDownLatch latch = new CountDownLatch(3);</code> 中的 3 改成 4，那么结果是一样的，main 线程同样会因为差一个 <code>countDown</code> 而一直无法被唤醒。</p>
+<h4 id="3-没有调用-await-方法">3. 没有调用 await 方法</h4>
+<p>我曾经遇到过这样的线上问题，下面给出代码说明：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DataLoader</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">load</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+        List<span style="color:#f92672">&lt;</span>SomeKindOfData<span style="color:#f92672">&gt;</span> list <span style="color:#f92672">=</span> <span style="color:#f92672">...</span>
+        <span style="color:#66d9ef">boolean</span> locked <span style="color:#f92672">=</span> RedisLock<span style="color:#f92672">.</span><span style="color:#a6e22e">lock</span><span style="color:#f92672">(</span>bizCode<span style="color:#f92672">);</span>
+        <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>locked<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+            <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+                driver<span style="color:#f92672">.</span><span style="color:#a6e22e">drive</span><span style="color:#f92672">(</span>list<span style="color:#f92672">);</span>
+            <span style="color:#f92672">}</span> catech<span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+                <span style="color:#75715e">//...
+</span><span style="color:#75715e"></span>            <span style="color:#f92672">}</span> <span style="color:#66d9ef">finally</span> <span style="color:#f92672">{</span>
+                RedisLock<span style="color:#f92672">.</span><span style="color:#a6e22e">unLock</span><span style="color:#f92672">(</span>bizCode<span style="color:#f92672">);</span>
+            <span style="color:#f92672">}</span>
+        <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>Driver 中的各个子操作也都调用了 <code>countDown</code> 方法，但是 Driver 里却没有调用 await，从而导致 <code>DataLoader </code> 中的分布式锁提前释放，但是由于 Driver 中的各子操作耗时很大，所以迟迟没执行完，这时由于临界数据没有锁住，下一个请求过来时还会加载到同样的待处理数据，从而出现数据错乱问题。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">Driver</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">drive</span><span style="color:#f92672">(</span>List<span style="color:#f92672">&lt;</span>SomeKindOfData<span style="color:#f92672">&gt;</span> list<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        CountDownLatch latch <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> CountDownLatch<span style="color:#f92672">(</span>3<span style="color:#f92672">);</span>
+        doProcOne<span style="color:#f92672">(</span>executor<span style="color:#f92672">,</span> latch<span style="color:#f92672">);</span>
+        doProcTow<span style="color:#f92672">(</span>executor<span style="color:#f92672">,</span> latch<span style="color:#f92672">);</span>
+        doProcThree<span style="color:#f92672">(</span>executor<span style="color:#f92672">,</span> latch<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div>
+    </section>
+
+    <footer class="post-footer">
+      
+        <figure class="author-image">
+            <a class="img" href="https://golb.cc/" style="background-image: url(https://golb.cc/images/logo-cogi.gif)"><span class="hidden">cszxyang's Picture</span></a>
+        </figure>
+      
+
+      
+
+
+
+
+
+<section class="author" style="width:100%;">
+  <div class="author-meta" style="width:100%;text-align:center;">
+    <span class="author-location icon-user"> A shell picker</span>
+    <span class="author-location icon-location"> Guangzhou, China</span>
+    <span class="author-link icon-link"><a href="https://cszxyang.github.io/"> https://cszxyang.github.io/</a></span>
+    
+
+    
+  </div>
+  <br/>
+</section>
+
+
+      
+        <aside class="read-next">
+  
+      <span class="readmore-prev readmore-meta">PREV: <a href="https://golb.cc/blog/2021/08/22/concurrenthashmap-1.7-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/"><h4>ConcurrentHashMap 1.7 源码分析</h4></a></span>
+      
+  
+
+  
+      <span class="readmore-next readmore-meta">NEXT: <a href="https://golb.cc/blog/2021/08/19/reentrantlock-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/"><h4>ReentrantLock 源码分析</h4></a></span>
+      
+  
+</aside>
+<br/>
+
+      
+      
+      
+
+	
+	<div id="lv-container" data-id="city" data-uid="MTAyMC81MDQ0OC8yNjkzNQ==">
+		<script type="text/javascript">
+	   (function(d, s) {
+	       var j, e = d.getElementsByTagName(s)[0];
+
+	       if (typeof LivereTower === 'function') { return; }
+
+	       j = d.createElement(s);
+	       j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+	       j.async = true;
+
+	       e.parentNode.insertBefore(j, e);
+	   })(document, 'script');
+		</script>
+	<noscript> 为正常使用来必力评论功能请激活JavaScript</noscript>
+	</div>
+	
+
+	
+
+
+    </footer>
+</article>
+
+</main>
+
+    <footer class="site-footer clearfix">
+        <a id="gotop" class="icon-arrow-up" href="#" title="back to top"></a>
+
+        <section class="copyright"><a href="">cszxyang. </a> All rights reserved &copy; 2018 - 2020</section>
+        
+        <section class="poweredby">Proudly generated by <a href="http://gohugo.io">HUGO</a>, with <a class="icon-theme" href="https://github.com/vjeantet/hugo-theme-casper">Casper</a> theme &nbsp;
+          <span id="cnzz_stat_icon_1000165127">
+            <a href="https://tongji.baidu.com/web/10000135732/trend/latest?siteId=15190378" target="_blank" title="站长统计">
+              <img border="0" hspace="0" vspace="0" src="http://icon.cnzz.com/img/pic1.gif">
+            </a>
+          </span>
+        </section>
+        
+    </footer>
+  </div> 
+    <script type="text/javascript" src="https://golb.cc/js/jquery.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/jquery.fitvids.js"></script>
+    <script type="text/javascript" src="https://golb.cc/js/index.js"></script>
+
+    
+    
+    
+    
+
+    
+</body>
+</html>
+
