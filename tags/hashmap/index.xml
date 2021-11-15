@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>hashmap on cszxyang</title>
+    <link>http://golb.cc/tags/hashmap/</link>
+    <description>Recent content in hashmap on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/tags/hashmap/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>聊聊多线程环境下的 HashMap</title>
+      <link>http://golb.cc/post/2021-06-03-hashmap-concurrency/</link>
+      <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-06-03-hashmap-concurrency/</guid>
+      <description>&lt;p&gt;很久之前我写了这么一个并发异步的工具方法，传入的 &lt;code&gt;suppliers&lt;/code&gt; 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 &lt;code&gt;supplier&lt;/code&gt;，再通过多线程异步处理，最后统一收集完结果返回。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

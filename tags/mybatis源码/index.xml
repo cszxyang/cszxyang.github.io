@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>MyBatis源码 on cszxyang</title>
+    <link>http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/</link>
+    <description>Recent content in MyBatis源码 on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Mon, 08 Nov 2021 10:54:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>MyBatis 源码 - Mapper 的动态代理实现过程</title>
+      <link>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</link>
+      <pubDate>Mon, 08 Nov 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</guid>
+      <description>&lt;p&gt;本文通过源码分析了解 MyBatis 的 Mapper 动态代理的实现原理。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

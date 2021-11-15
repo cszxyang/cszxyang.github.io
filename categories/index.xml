@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Categories on cszxyang</title>
+    <link>http://golb.cc/categories/</link>
+    <description>Recent content in Categories on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sun, 22 Aug 2021 10:54:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/categories/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>JDK 源码</title>
+      <link>http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/</link>
+      <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>MySQL</title>
+      <link>http://golb.cc/categories/mysql/</link>
+      <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/categories/mysql/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>设计模式</title>
+      <link>http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</link>
+      <pubDate>Fri, 14 Aug 2020 08:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>Java</title>
+      <link>http://golb.cc/categories/java/</link>
+      <pubDate>Sat, 30 May 2020 09:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/categories/java/</guid>
+      <description></description>
+    </item>
+    
+  </channel>
+</rss>

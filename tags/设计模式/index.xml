@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>设计模式 on cszxyang</title>
+    <link>http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</link>
+    <description>Recent content in 设计模式 on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Fri, 14 Aug 2020 08:50:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>记一次在实际项目中的策略设计模式应用</title>
+      <link>http://golb.cc/post/2020-08-25-strategy-app/</link>
+      <pubDate>Fri, 14 Aug 2020 08:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-08-25-strategy-app/</guid>
+      <description>&lt;p&gt;最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 &lt;code&gt;longtext&lt;/code&gt; 类型的字段 &lt;code&gt;extend_info&lt;/code&gt; 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 &lt;code&gt;extend_info_cipher&lt;/code&gt; 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>一个易扩展的负载均衡组件实现</title>
+      <link>http://golb.cc/post/2020-05-30-java-spi/</link>
+      <pubDate>Sat, 30 May 2020 09:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-05-30-java-spi/</guid>
+      <description>&lt;p&gt;最近在看微博的 motan 的源码，其中使用了 SPI 和模板方法设计模式实现负载均衡组件，觉得比较有意思，所以把它单独拿出来研究，不过 motan 的实现封装得有点复杂，所以我想介绍 SPI、模板方法设计模式及一些常见的负载均衡算法相关的知识，然后再基于这些知识自己实现一个类似的易扩展的负载均衡组件。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

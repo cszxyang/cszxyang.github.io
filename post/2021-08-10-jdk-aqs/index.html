@@ -1,0 +1,1542 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>JDK 源码 - AbstractQueuedSynchronizer | cszxyang</title>
+    <meta property="og:title" content="JDK 源码 - AbstractQueuedSynchronizer - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-08-18T10:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-08-18T10:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="JDK 源码 - AbstractQueuedSynchronizer">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/post/2021-08-10-jdk-aqs/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                <div class="col-8" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">JDK 源码 - AbstractQueuedSynchronizer</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月18日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>前段时间线上遇到 <code>OOM</code> 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 <code>AbstractQueuedSynchronizer</code> ，没办法只好先把基础的组件搞明白。</p>
+<h3 id="一简介">一、简介</h3>
+<p><code>AbstractQueuedSynchronizer</code> 是一个抽象类，从字面上看，它是一个 <code>Synchronizer</code>，即一个线程同步器，按我理解是一个实现并发同步控制（如锁、异步转同步工具）的标准和规范， <code>JDK</code> 并发包 <code>java.util.concurrent</code> 下的很多组件都是基于它实现的，如 <code>ReentrantLock</code>、<code>CountDownLatch</code>、<code>ReentrantReadWriteLock</code>、<code>Semaphore</code> 等；另外它还被 <code>Queued</code> 修饰，也就是它是带有队列辅助控制的。</p>
+<p><code>AbstractQueuedSynchronizer</code> 采用队列的方式缓存获取不到临界资源的线程，这个队列的设计参考了 CLH，保留了 CLH 释放资源时通知后继节点的思想，但是在自旋方面做了优化，关于 CLH 的内容在此不展开讲述。纵观 <code>AbstractQueuedSynchronizer</code> 源码，其中主要特点是使用了 <code>CAS</code>、自旋、<code>park/unpark</code> 、模板方法设计模式等技术或设计模式，当然还有很多巧妙的算法实现。</p>
+<h4 id="1-cas">1. <code>CAS</code></h4>
+<p><code>CAS</code> 全称是 <code>Compare And Swap</code>，即 “比较现在的值是否符合预期，是则将之设置成想要的值”，因为在并发环境下，某个线程在比较与交换期间可能有其他线程对该内存进行了操作，所以 <code>CAS</code> 必须是一个原子性的操作，这样才能保证新值的设置是基于前一个最新的数据版本计算而来的。</p>
+<p>一般来说，<code>CAS</code> 的返回值是被 swap 出来的旧值，有些地方返回一个 boolean 值，表示该操作是否能设置成功，如果在 <code>CAS</code> 期间，有其他线程修改了给定内存的数据，那么返回失败，这种只关心是否设值成功的方法，而不关心被替换的旧值的方法往往称为 <code>Compare And Set</code>。</p>
+<p><code>JDK</code> 通过 <code>Unsafe</code> 类提供了 <code>CAS</code> 接口，至于 <code>Unsafe</code> 怎么实现 <code>CAS</code> 此处不展开介绍。</p>
+<h4 id="2-线程可见的同步状态">2. 线程可见的同步状态</h4>
+<p>前面提到如果在一个线程 <code>t0</code> 在 <code>CAS</code> 期间可能有另一个线程 <code>t1</code> 修改了内存的数据，那么 <code>t1</code> 这个修改的动作需要让 <code>t0</code> 有所感知，为此相应的数据变量需要使用 <code>volatile</code> 修饰，以使得它的变化对各线程实时可见。</p>
+<p>所以<code>AbstractQueuedSynchronizer</code>中设置了一个 <code>private volatile int state;</code> 字段，抽象而言，它是某种临界资源，可以将之简单理解成锁，由于我们这篇文章主要讲述 <code>AbstractQueuedSynchronizer</code> ，不涉及锁这个概念，所以我称这个字段为 <code>同步状态</code>。</p>
+<h4 id="3-park-与-unpark">3. <code>park</code> 与 <code>unpark</code></h4>
+<p>如果一个线程去获取同步状态失败，有一个处理方式是让它不停地自旋，也就是写个死循环，不获取到锁不罢休，但是这样太耗费 CPU 资源了，所以不妨让获取不到锁的线程先阻塞，如果同步状态释放了而它又有机会获取到的话就唤醒它去尝试获取。</p>
+<p>为了实现释放时间片，或许可以考虑的方式有：</p>
+<ul>
+<li>让获取同步状态失败的线程 <code>sleep</code> ，但是线程休眠的时间难以确定；</li>
+<li>使用 wait 让线程阻塞，但是据说 wait 与 notify 设计用于线程通信所以不合适（待学习）</li>
+</ul>
+<p>所以作者使用了 <code>LockSupport</code> 中的 <code>park/unpark</code> 方法实现线程的阻塞与唤醒。</p>
+<h4 id="4-模板方法设计模式">4. 模板方法设计模式</h4>
+<p>作为一个抽象类，一个实现同步控制的标准，很正常地，<code>AbstractQueuedSynchronizer</code> 中会对某些操作抽象化，让实现 <code>AbstractQueuedSynchronizer</code> 标准的子类去实现这些方法，但 <code>AbstractQueuedSynchronizer</code>  不仅仅是提供接口，它需要有自己的一套运作基础，所以在 <code>AbstractQueuedSynchronizer</code>  源码中看到模板方法设计模式并不需要感到惊讶。</p>
+<h5 id="41-模板方法">4.1. 模板方法</h5>
+<p><code>AbstractQueuedSynchronizer</code> 支持独占模式和共享模式，对于同步状态的获取和释放，都分别定义了相应的模板方法，模板方法中再根据子类的钩子函数执行情况决定后面的操作。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">// 获取独占同步状态，tryAcquire 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquire</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>tryAcquire<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> acquireQueued<span style="color:#000;font-weight:bold">(</span>addWaiter<span style="color:#000;font-weight:bold">(</span>Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">EXCLUSIVE</span><span style="color:#000;font-weight:bold">),</span> arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        selfInterrupt<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 可中断地获取独占同步状态，tryAcquire 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquireInterruptibly</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">throws</span> InterruptedException <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupted</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> InterruptedException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>tryAcquire<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        doAcquireInterruptibly<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 获取共享同步状态，doAcquireShared 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquireShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        doAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 可中断地获取共享同步状态，doAcquireShared 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquireSharedInterruptibly</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">throws</span> InterruptedException <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupted</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> InterruptedException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        doAcquireSharedInterruptibly<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 释放独占同步状态，tryRelease 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">release</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryRelease<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        Node h <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> h<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">!=</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            unparkSuccessor<span style="color:#000;font-weight:bold">(</span>h<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 释放共享同步状态，tryReleaseShared 是钩子函数
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">releaseShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryReleaseShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        doReleaseShared<span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h5 id="42-钩子函数">4.2. 钩子函数</h5>
+<p>由于 <code>AbstractQueuedSynchronizer</code> 只是制定了获取和释放前后的流程，至于获取和释放同步状态本身的操作则是需要具体的子类去实现，因为它只是标准的制定者。所以如果子类没有重写下面这些钩子函数，将会抛出异常，因为 <code>AbstractQueuedSynchronizer</code> 的运作需要依赖回调钩子函数的执行情况。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">// 独占模式下使用，尝试获取同步状态
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryAcquire</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> UnsupportedOperationException<span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 独占模式下使用，尝试释放同步状态
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryRelease</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> UnsupportedOperationException<span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 共享模式下使用，尝试获取同步状态
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">tryAcquireShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> UnsupportedOperationException<span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 共享模式下使用，尝试释放同步状态
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryReleaseShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> UnsupportedOperationException<span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// 判断当前线程是否持有同步状态
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">isHeldExclusively</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> UnsupportedOperationException<span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="二源码分析">二、源码分析</h3>
+<p>从持有同步状态的线程数来看，<code>AbstractQueuedSynchronizer</code> 支持独占和共享模式，独占模式下只能有一个线程持有同步状态，在此期间，其他没有获取到同步状态的线程只能等待；共享模式下则支持多个线程同时持有同步状态。</p>
+<p>所谓的获取同步状态其实就是某个线程 t 通过 <code>CAS</code> 操作将 <code>state</code> 字段从 0 改成 1，如果改成功，那么就称该线程持有了该同步状态，在独占模式下，其他线程只能等待线程 t 释放该同步状态才有机会获取到该同步状态，而所谓的释放同步状态，其实就是将 <code>state</code> 字段从 1 改成 0。</p>
+<p>对于独占模式释放同步状态不需要  <code>CAS</code> 操作，因为任一时刻只有一个线程持有同步状态，即任一时刻只有一个线程进行释放同步状态的操作，不存在多线程并发。</p>
+<p>下面我们介绍独占模式下的获取与释放同步状态的过程。</p>
+<h4 id="1-独占模式">1. 独占模式</h4>
+<p>独占模式下，任何时刻只允许有一个线程持有同步状态，所以，<code>state</code> 状态一般不是 0 就是 1，但是如果是允许同一个线程重入，也就是一个线程多次获取到同步状态，那么 <code>state</code> 逐次就会累加。为了实现独占，设置了 <code>exclusiveOwnerThread</code> 指针，指向当前时刻获取到同步状态的线程。</p>
+<h5 id="11-获取同步状态">1.1 获取同步状态</h5>
+<p><code>AbstractQueuedSynchronizer</code> 独占模式下获取同步状态的操作在方法 <code>acquire</code> 中，从上文我们知道 <code>acquire</code> 是一个模板方法，它会回调子类的狗子函数 <code>tryAcquire</code>，如果子类不重写 <code>tryAcquire</code> 则默认抛出异常，至于子类怎么实现 <code>tryAcquire</code> 方法本文不关心，我们只关心它的返回值，返回 true 说明获取同步状态成功，否则代表获取失败。</p>
+<p><code>acquire</code> 方法利用了与运算符断路的思想，即在一个判断链中，如果前一个判断不通过，那么便不会再进行后续的判断，换言之，只有前一个判断通过才会继续下一个判断。所以如果 <code>tryAcquire</code> 返回 false，说明获取同步状态失败，由于对 <code>tryAcquire</code> 返回值取非，所以会执行后续的 <code>acquireQueued(addWaiter(Node.EXCLUSIVE), arg)</code> 操作，其实也就是说如果获取同步状态成功，那么方法就差不多结束了，否则需要将线程入队，我们再看入队的操作。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquire</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>tryAcquire<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> acquireQueued<span style="color:#000;font-weight:bold">(</span>addWaiter<span style="color:#000;font-weight:bold">(</span>Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">EXCLUSIVE</span><span style="color:#000;font-weight:bold">),</span> arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        selfInterrupt<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>首先进行的是 <code>addWaiter(Node.EXCLUSIVE)</code> 操作，大致分为以下步骤：</p>
+<ol>
+<li>创建一个 Node 节点 node，其中的 thread 字段存储当前线程。</li>
+<li>如果队列已经初始化，采用快速尾插法将 node 插到队列的最后，由于尾插存在多线程并发可能，所以使用 <code>compareAndSetTail</code>，即 <code>CAS</code> 操作。</li>
+<li>如果队列还没初始化，那么调用 <code>enq</code> 方法。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Node <span style="color:#900;font-weight:bold">addWaiter</span><span style="color:#000;font-weight:bold">(</span>Node mode<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Node node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Node<span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">(),</span> mode<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// Try the fast path of enq; backup to full enq on failure
+</span><span style="color:#998;font-style:italic"></span>    Node pred <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>pred <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span> <span style="color:#000;font-weight:bold">=</span> pred<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetTail<span style="color:#000;font-weight:bold">(</span>pred<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+            pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    enq<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>我们再看 <code>enq(node)</code> 方法，其中是一个死循环，实际上这个死循环只会迭代两次便结束，第一次迭代时，队列必然没有初始化，那么就会 <strong>创建一个 Node 节点作为哨兵，注意哨兵中的 thread 引用不指向任何线程对象</strong>，由于在队列未初始化的时候也可能有多个线程来获取同步状态然后竞相创建哨兵，所以这里也使用了基于 <code>CAS</code> 的 <code>compareAndSetHead</code> 方法进行队头的设置；此后进行第二次迭代，由于队列已经初始化，所以只需将 node 节点 <code>CAS</code> 地插到哨兵的尾部即可，死循环结束。</p>
+<p>我们看到第二次迭代的操作跟 <code>addWaiter</code> 方法中的 if 判断中操作是一致的，这是由于初始化队列的操作只需进行一次，后续都是直接尾插即可，这样就能理解为什么作者在 <code>addWaiter</code>  方法里写的注释 <code>Try the fast path of enq</code> 了。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Node <span style="color:#900;font-weight:bold">enq</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">final</span> Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+        Node t <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#998;font-style:italic">// Must initialize
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetHead<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Node<span style="color:#000;font-weight:bold">()))</span>
+                tail <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+            node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span> <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetTail<span style="color:#000;font-weight:bold">(</span>t<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">return</span> t<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>再回到 <code>acquireQueued(addWaiter(Node.EXCLUSIVE), arg)</code> 操作，<code>addWaiter</code> 方法返回的是当前线程的节点，然后传进 <code>acquireQueued</code> 方法。<code>acquireQueued</code> 方法中主要做的事情包括：</p>
+<ol>
+<li>自旋，判断是否可以获取同步状态。</li>
+<li>如果获取同步状态失败，判断是否需要 park 阻塞，如果要则进行阻塞。</li>
+<li>注意线程 park 了之后会阻塞在 <code>parkAndCheckInterrupt</code> 方法中，如果某个时刻被唤醒，则会继续尝试获取同步状态，获取不到则又会阻塞，如此循环，直到获取成功为止。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">acquireQueued</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">final</span> Node node<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">boolean</span> failed <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">boolean</span> interrupted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">final</span> Node p <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">predecessor</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>p <span style="color:#000;font-weight:bold">==</span> head <span style="color:#000;font-weight:bold">&amp;&amp;</span> tryAcquire<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                setHead<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+                p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// help GC
+</span><span style="color:#998;font-style:italic"></span>                failed <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">return</span> interrupted<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>shouldParkAfterFailedAcquire<span style="color:#000;font-weight:bold">(</span>p<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> parkAndCheckInterrupt<span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                interrupted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>failed<span style="color:#000;font-weight:bold">)</span>
+            cancelAcquire<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>看到上面的代码需要讲一些细节的地方，首先为什么每次自旋 <code>tryAcquire</code> 获取同步状态时要判断当前节点的前一个节点是否是头节点呢？即 <code>p == head</code>，因为 <code>AbstractQueuedSynchronizer</code> 释放同步状态时，会唤醒靠近队列哨兵的第一个非取消节点，也就是说这个节点具有获取锁的优先权，从这点来看，有点公平锁的意味，但其实 CLH 也是这样的，一个线程释放资源后会唤醒直接后继节点。</p>
+<p>如果线程自旋能够到获取同步状态，那么这个线程所在节点中的 thread 指针将被置空并成为新的哨兵节点，原哨兵节点会被删除引用关系等待垃圾回收器回收；而如果线程还是获取不到同步状态，那么会先进入 <code>shouldParkAfterFailedAcquire</code> 判断当前节点是否能被阻塞，此处涉及 Node 节点的 <code>waitStatus</code> 这个变量，它的取值范围在以下几个常量中：</p>
+<ul>
+<li>CANCELLED：代表该节点存储的线程取消排队，那么这样的节点是需要清理的；</li>
+<li>SIGNAL：代表当前节点的后继节点需要被唤醒，因为阻塞的线程已经让出了 CPU，只能等待外界将之唤醒，所以线程休眠前，会在其前继节点中打上标记，告诉它当前线程让出时间片，而不是一直在自旋，因为这样会很浪费 CPU 资源，以后如果它释放了同步状态，需要向当前线程发出唤醒信号。</li>
+<li>CONDITION：待研究。</li>
+<li>PROPAGATE：与资源共享有关。</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/** waitStatus value to indicate thread has cancelled */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> CANCELLED <span style="color:#000;font-weight:bold">=</span>  1<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/** waitStatus value to indicate successor&#39;s thread needs unparking */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> SIGNAL    <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>1<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/** waitStatus value to indicate thread is waiting on condition */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> CONDITION <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>2<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> PROPAGATE <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>3<span style="color:#000;font-weight:bold">;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>有了这样的背景，我们再看 <code>shouldParkAfterFailedAcquire</code> 方法，大致可分为以下几种情况：</p>
+<ol>
+<li>如果当前节点的前继节点的 <code>waitStatus</code> 是否是 -1，则可以阻塞当前线程</li>
+<li>如果当前节点的前继节点的 <code>waitStatus</code> 是否是大于零，即值为 1，说明是取消了的，很可能前继的前继节点也是取消了的，于是触发取消节点的清理操作，这个设计很有意思，按我理解是用了一种类似懒加载的被动触发的思想。</li>
+<li>如果当前节点的是 0 或 -2 等其他什么值，那么就将该值改成 -1，表示当前线程将进行阻塞，其前继节点释放同步状态时，需要唤醒它，这种情况出现在队列初始化或清空后，哨兵节点的 <code>waitStatus</code> 为 0。<code>acquireQueued</code>  的下一次自旋获取锁失败的话将会走进 shouldParkAfterFailedAcquire 方法的第一个判断，然后满足阻塞条件，当前线程阻塞。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">shouldParkAfterFailedAcquire</span><span style="color:#000;font-weight:bold">(</span>Node pred<span style="color:#000;font-weight:bold">,</span> Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// 默认是 0
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">==</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SIGNAL</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">do</span> <span style="color:#000;font-weight:bold">{</span>
+            node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span> <span style="color:#000;font-weight:bold">=</span> pred <span style="color:#000;font-weight:bold">=</span> pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">);</span>
+        pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+        compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>pred<span style="color:#000;font-weight:bold">,</span> ws<span style="color:#000;font-weight:bold">,</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SIGNAL</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>而阻塞的代码相对比较好理解，除了 <code>Thread.interrupted()</code> 这句，我们先留个问题的引子，以后再回看。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">parkAndCheckInterrupt</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    LockSupport<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">park</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupted</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h5 id="12-释放同步状态">1.2 释放同步状态</h5>
+<p><code>AbstractQueuedSynchronizer</code> 独占模式下的同步状态的释放过程在 <code>release</code> 方法中，它是一个模板方法，钩子函数实现具体的释放过程，返回值代表是否释放成功，如果释放成功，则看队列有没有初始化，有则需要调用 <code>unparkSuccessor</code> 唤醒一个线程。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">release</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryRelease<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        Node h <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> h<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">!=</span> 0<span style="color:#000;font-weight:bold">)</span>
+            unparkSuccessor<span style="color:#000;font-weight:bold">(</span>h<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>注意这里的判断 <code>h != null &amp;&amp; h.waitStatus != 0</code> ，<code>h != null</code> 代表队列已经初始化了，那么 <code>h.waitStatus != 0</code> 怎么理解呢？如果 <code>waitStatus</code>  等于 0，说明没有线程 park，也就是说没有线程需要被唤醒。<code>unparkSuccessor</code> 方法采用倒序获取队列中可唤醒的线程，然后将之唤醒，至于为什么采用倒序而不是从前往后遍历，我们后面探讨。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unparkSuccessor</span><span style="color:#000;font-weight:bold">(</span>Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">,</span> ws<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    Node s <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Node t <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> t <span style="color:#000;font-weight:bold">!=</span> node<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span><span style="color:#000;font-weight:bold">)</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;=</span> 0<span style="color:#000;font-weight:bold">)</span>
+                s <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        LockSupport<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unpark</span><span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="2-共享模式">2. 共享模式</h4>
+<p>共享模式下，多个线程可以同时持有同步状态，<code>state</code> 字段的大小往往代表有多少个线程共享该同步状态，异步转同步工具 <code>CountDownLatch</code> 就是基于 <code>AbstractQueuedSynchronizer</code> 的共享模式实现。</p>
+<p>在独占模式下，只有等持有同步状态的线程释放同步状态，才会取唤醒等待队列的第一个非哨兵可唤醒线程 t，t 会自旋获取同步状态。但是在共享模式下，线程 t 获取同步状态时，如果获取成功，将会唤醒等待队列的线程来获取同步状态，也就是说同步状态的获取和释放都可能触发等待队列后继节点的唤醒，而且共享模式下，会尝试唤醒所有后继节点。</p>
+<h5 id="11-获取同步状态-1">1.1 获取同步状态</h5>
+<p>独占模式下同步状态的获取定义在下面的模板方法中，但是与独占模式的同步状态获取不同，钩子函数 <code>tryAcquireShared</code> 的返回值是整型而不是布尔类型的，它的返回值取值范围包括：</p>
+<ul>
+<li>大于 0：当前线程获取同步状态成功，同时同步状态未共享完毕，其他线程仍有可能获取到。</li>
+<li>等于 0：当前线程获取同步状态成功，同时同步状态共享完，其他线程不能再获取到，需要等待。</li>
+<li>小于 0：当前线程获取同步状态失败，当前线程将入队。</li>
+</ul>
+<p>当然上述的约束并不是严谨的，<code>CountDownLatch</code> 在此处不会返回 0。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">acquireShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        doAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p><code>doAcquireShared</code> 主要经过以下几个步骤：</p>
+<ol>
+<li>节点化当前线程并入队</li>
+<li>如果当前节点的前继节点是哨兵，则再次调用 <code>tryAcquireShared</code> 获取同步状态，如果返回值成功，则继续调用 <code>setHeadAndPropagate</code> 方法，<code>setHeadAndPropagate</code> 比较复杂，主要的作用是将等待队列中此刻在等待的线程逐一唤醒去获取同步状态。</li>
+<li>如果当前节点的前继节点不是哨兵。则处理方式与 <code>acquireQueued</code>  方法一样，主要将前继节点的等待状态记为 -1，然后阻塞。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">doAcquireShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">final</span> Node node <span style="color:#000;font-weight:bold">=</span> addWaiter<span style="color:#000;font-weight:bold">(</span>Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SHARED</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">boolean</span> failed <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">boolean</span> interrupted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">final</span> Node p <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">predecessor</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>p <span style="color:#000;font-weight:bold">==</span> head<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#458;font-weight:bold">int</span> r <span style="color:#000;font-weight:bold">=</span> tryAcquireShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>r <span style="color:#000;font-weight:bold">&gt;=</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    setHeadAndPropagate<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">,</span> r<span style="color:#000;font-weight:bold">);</span>
+                    p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// help GC
+</span><span style="color:#998;font-style:italic"></span>                    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>interrupted<span style="color:#000;font-weight:bold">)</span>
+                        selfInterrupt<span style="color:#000;font-weight:bold">();</span>
+                    failed <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>shouldParkAfterFailedAcquire<span style="color:#000;font-weight:bold">(</span>p<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> parkAndCheckInterrupt<span style="color:#000;font-weight:bold">())</span>
+                interrupted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>failed<span style="color:#000;font-weight:bold">)</span>
+            cancelAcquire<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>由于当前线程获取到锁了，所以 <code>setHeadAndPropagate</code> 会先将当前节点设置为哨兵节点，并记录旧哨兵，接下来的 第一个 if 的判断很复杂，分情况探究，注意转进来的 propagate 必定大于或等于 0。</p>
+<ul>
+<li>判断为 true：
+<ol>
+<li><code>propagate &gt; 0</code>：说明当前线程获取到同步状态后，其他线程还能继续获取到，则会尝试唤醒等待队列中的其他线程。</li>
+<li><code>propagate == 0 &amp;&amp; h == null</code>：没有剩余的共享资源可获取，同时等待队列未初始化，则再次确认判断当前节点（新的哨兵节点）后面在这一秒附近有没有新插入共享型的后继节点，有则唤醒它们。</li>
+<li><code>propagate == 0 &amp;&amp; h != null &amp;&amp; h.waitStatus &lt; 0</code>：没有剩余的共享资源可获取，同时等待队列已初始化，则说明原等待队列其实没有其他线程在等待，则再次确认判断当前节点（新的哨兵节点）后面在这一秒附近有没有新插入共享型的后继节点，有则唤醒它们。</li>
+</ol>
+</li>
+<li>判断为 false：
+<ol>
+<li><code>propagate == 0 &amp;&amp; h != null &amp;&amp; h.waitStatus &gt;= 0 &amp;&amp; (h = head) != null &amp;&amp; h.waitStatus &gt;= 0</code>：同步状态共享完毕，后来的线程需等待，原来的队列已经初始化，旧哨兵不为空且其 <code>waitStatus</code> 大于或等于 0，即取消或无线程在等待，</li>
+</ol>
+</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">setHeadAndPropagate</span><span style="color:#000;font-weight:bold">(</span>Node node<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> propagate<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Node h <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// Record old head for check below
+</span><span style="color:#998;font-style:italic"></span>    setHead<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>propagate <span style="color:#000;font-weight:bold">&gt;</span> 0 <span style="color:#000;font-weight:bold">||</span> h <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> h<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;</span> 0 <span style="color:#000;font-weight:bold">||</span>
+        <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> h<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Node s <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isShared</span><span style="color:#000;font-weight:bold">())</span>
+            doReleaseShared<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>写到这里我开始问自己，为什么都没有资源可获取了，还要取唤醒等待队列中的节点来获取呢？我想作者大概有种赌博的心态，即“既然这个线程能拿到了一个共享资源，说不定接下来就像天上掉馅饼一样，其他共享资源也都被释放了，有这样的好事肯定要和跟着我的这一批兄弟说，叫他们先醒来，做好发达准备。”</p>
+<h5 id="12-释放同步状态-1">1.2 释放同步状态</h5>
+<p>释放同步状态的逻辑定义在模板方法 <code>releaseShared</code> 中，其中钩子函数 <code>tryReleaseShared</code> 由子类去实现，如果同步状态完全释放，则会触发 <code>doReleaseShared</code> 逻辑。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">releaseShared</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> arg<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>tryReleaseShared<span style="color:#000;font-weight:bold">(</span>arg<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        doReleaseShared<span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>再看 <code>doReleaseShared</code> 方法，当同步状态全都被释放时，将会进入该方法，其中主要的判断:</p>
+<ul>
+<li>如果队列不为空，判断哨兵的等待状态，如果是 SIGNAL，则唤醒其后继节点，注意如果唤醒失败就 continue，但是唤醒成功也仍然没有跳出循环，这时我们转换到 <code>AbstractQueuedSynchronizer</code> 中线程阻塞的地方 <code>acquireQueued</code> 方法，第一个非哨兵非取消节点被唤醒，并将原头节点删除，所以下面的代码的当下一轮迭代进来时将会继续往后唤醒线程，直到整个队列为空。</li>
+<li>如果队列为空，则结束。</li>
+</ul>
+<p>这个方法是在同步状态（完全或部分）释放时调用的，这时就会把等待队列中的线程逐一唤醒，让它们都有机会去获取到同步状态。注意最后一个 <code>h == head</code> 判断，如果 <code>unpark</code> 唤醒的后继节点仍然抢不到同步状态，那么就会退出这里的循环，而不是一直运转。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">doReleaseShared</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+        Node h <span style="color:#000;font-weight:bold">=</span> head<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> h <span style="color:#000;font-weight:bold">!=</span> tail<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> h<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">==</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SIGNAL</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>h<span style="color:#000;font-weight:bold">,</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SIGNAL</span><span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                    <span style="color:#000;font-weight:bold">continue</span><span style="color:#000;font-weight:bold">;</span>            <span style="color:#998;font-style:italic">// loop to recheck cases
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#000;font-weight:bold">}</span>
+                unparkSuccessor<span style="color:#000;font-weight:bold">(</span>h<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">==</span> 0 <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">!</span>compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>h<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">,</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">PROPAGATE</span><span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">continue</span><span style="color:#000;font-weight:bold">;</span>                <span style="color:#998;font-style:italic">// loop on failed CAS
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#998;font-style:italic">// loop if head changed
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">==</span> head<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>对于 <code>unparkSuccessor</code> 方法，其中会从队列的尾部往前找 <code>waitStatus</code> 小于等于 0 的节点，直到找到的节点最接近哨兵节点，找到就会将之 <code>unpark</code>，至于为什么不是从前往后遍历我们后续探讨。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unparkSuccessor</span><span style="color:#000;font-weight:bold">(</span>Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span>
+        compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">,</span> ws<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">);</span>
+
+    Node s <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Node t <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> t <span style="color:#000;font-weight:bold">!=</span> node<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span><span style="color:#000;font-weight:bold">)</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;=</span> 0<span style="color:#000;font-weight:bold">)</span>
+                s <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        LockSupport<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unpark</span><span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="三实例场景">三、实例场景</h3>
+<p>下面我们通过运行源码看 <code>AbstractQueuedSynchronizer</code>  的运作过程是否和分析的一致。我们自己实现一个不可重入的非公平独占锁，如下所示：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">NonFairLock</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">private</span> Sync sync<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">Sync</span> <span style="color:#000;font-weight:bold">extends</span> AbstractQueuedSynchronizer <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+        <span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryAcquire</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> acquires<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">final</span> Thread current <span style="color:#000;font-weight:bold">=</span> Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> getState<span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>c <span style="color:#000;font-weight:bold">==</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetState<span style="color:#000;font-weight:bold">(</span>0<span style="color:#000;font-weight:bold">,</span> acquires<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                    setExclusiveOwnerThread<span style="color:#000;font-weight:bold">(</span>current<span style="color:#000;font-weight:bold">);</span>
+                    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        
+        <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+        <span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryRelease</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> releases<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> getState<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">-</span> releases<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#458;font-weight:bold">boolean</span> free <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>c <span style="color:#000;font-weight:bold">==</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                free <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+                setExclusiveOwnerThread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            setState<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">return</span> free<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">NonFairLock</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sync</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Sync<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">lock</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        sync<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">acquire</span><span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unlock</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        sync<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">release</span><span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>假设有 6 条线程，其中线程 <code>t0</code> 在获取到同步状态后陷入睡眠，此后的连续时间内，有 5 条线程依次进入 lock 方法尝试获取同步状态，但因为都失败并进行排队。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#3c5d5d;font-weight:bold">@Test</span>
+<span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">testSerialLock</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">throws</span> InterruptedException <span style="color:#000;font-weight:bold">{</span>
+    NonFairLock lock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> NonFairLock<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 6<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        Thread thread <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(()</span> <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                lock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;t0&#34;</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+                    TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>7<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                    TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MICROSECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>400<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>Exception e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">printStackTrace</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                lock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">});</span>
+        thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;t&#34;</span> <span style="color:#000;font-weight:bold">+</span> i<span style="color:#000;font-weight:bold">);</span>
+        TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MICROSECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">((</span>i <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">*</span> 100<span style="color:#000;font-weight:bold">);</span>
+        thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>为了直观看到等待队列的情况，我重写了 Node 的 toString 方法，在其中打印了当前节点的一些关键信息，我们在线程调用阻塞方法时，打印当前 AbstractQueuedSynchronizer 对象的 <code>private transient volatile Node head;</code>，即打印整个等待队列的信息。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">toString</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    StringBuilder builder <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> StringBuilder<span style="color:#000;font-weight:bold">();</span>
+    builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;[&#34;</span><span style="color:#000;font-weight:bold">).</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;, &#34;</span><span style="color:#000;font-weight:bold">).</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span>Objects<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">nonNull</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">?</span> thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">).</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;]&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>Objects<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">nonNull</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34; &lt;=&gt; &#34;</span><span style="color:#000;font-weight:bold">);</span>
+        builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">());</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>下面是输出，可以看到 [] 中输出了队列中每个节点的情况，其中第一个数字代表节点的 <code>waitStatus</code>，后一个信息代表节点中封装的线程。</p>
+<pre><code> INFO [t1] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [0, t1]
+ INFO [t2] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [-1, t1] &lt;=&gt; [0, t2]
+ INFO [t3] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [-1, t1] &lt;=&gt; [-1, t2] &lt;=&gt; [0, t3]
+ INFO [t4] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [-1, t1] &lt;=&gt; [-1, t2] &lt;=&gt; [-1, t3] &lt;=&gt; [0, t4]
+ INFO [t5] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [-1, t1] &lt;=&gt; [-1, t2] &lt;=&gt; [-1, t3] &lt;=&gt; [-1, t4] &lt;=&gt; [0, t5]
+</code></pre><p>上述过程获取同步状态顺序情况如下图所示：首先由于 <code>t0</code> 获取到同步状态后一直没有释放，所以后续的线程在 <code>CAS</code> 失败后都需要排队，当 <code>t1</code> 进入 <code>addWaiter</code> 后会进入 <code>enq</code> 方法创建一个哨兵节点，如图（1）所示，然后将当前线程节点化追加到其后，并且将前继节点的 <code>waitStatus</code> 改成 -1，然后自己阻塞，如图（2）所示。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_14-38-12.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_14-38-12.png" />
+        </a>
+    </p>
+<p>后续的四条线程与 <code>t1</code> 的情况一样，也依次入队，当 <code>t5</code> 入队后，整个等待队列的情况如图（3）所示。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_14-44-33.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_14-44-33.png" />
+        </a>
+    </p>
+<p>我们注意到上面的过程中有一些细节：</p>
+<ol>
+<li>等待队列是一个双向队列，每个节点存储线程、前后继节点、<code>waitStatus</code> 等信息。</li>
+<li>等待队列的头节点不存储线程，只作哨兵用。</li>
+<li>没有获取到同步状态的线程采用尾插法排队。</li>
+<li>线程入队除了维护前后继节点的关系外，还会将前继节点的 <code>waitStatus</code> 从 0 改成 -1</li>
+</ol>
+<p>七秒后 <code>t0</code> 释放同步状态，在释放同步状态的地方会调用 <code>unparkSuccessor</code> 方法，其中会拿到离哨兵最近的非取消非哨兵节点，然后将之唤醒，我们在唤醒时打印日志。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-31-33.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-31-33.png" />
+        </a>
+    </p>
+<p>同时我们在节点入队阻塞的地方打印日志，看被唤醒的线程的执行情况。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-02-31.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-02-31.png" />
+        </a>
+    </p>
+<p>然后我们得到的日志如下所示：</p>
+<pre><code>INFO [t0] - t0 释放同步状态并唤醒 t1
+INFO [t1] - 被唤醒
+INFO [t1] - 获取到同步状态 =&gt; aqs:[-1, null] &lt;=&gt; [-1, t2] &lt;=&gt; [-1, t3] &lt;=&gt; [-1, t4] &lt;=&gt; [0, t5]
+INFO [t1] - t1 释放同步状态并唤醒 t2
+INFO [t2] - 被唤醒
+INFO [t2] - 获取到同步状态 =&gt; aqs:[-1, null] &lt;=&gt; [-1, t3] &lt;=&gt; [-1, t4] &lt;=&gt; [0, t5]
+INFO [t2] - t2 释放同步状态并唤醒 t3
+INFO [t3] - 被唤醒
+INFO [t3] - 获取到同步状态 =&gt; aqs:[-1, null] &lt;=&gt; [-1, t4] &lt;=&gt; [0, t5]
+INFO [t3] - t3 释放同步状态并唤醒 t4
+INFO [t4] - 被唤醒
+INFO [t4] - 获取到同步状态 =&gt; aqs:[-1, null] &lt;=&gt; [0, t5]
+INFO [t4] - t4 释放同步状态并唤醒 t5
+INFO [t5] - 被唤醒
+INFO [t5] - 获取到同步状态 =&gt; aqs:[0, null]
+</code></pre><p><code>t5</code> 释放同步状态时 head 的 <code>waitStatus</code> 为 0，后续没有需要被唤醒的线程，所以没有打印 “t5 释放同步状态并唤醒 xx” 的日志。当 <code>t0</code> 释放锁唤醒 <code>t1</code> 后，<code>t1</code> 将会在 <code>acquireQueued</code> 中尝试获取同步状态，如果能获取到，则会将原哨兵节点从队列中删除，然后当前节点的线程置空，从而成为新哨兵。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-43-29.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/locks/Snipaste_2021-08-18_15-43-29.png" />
+        </a>
+    </p>
+<p>依此类推，直到最后 <code>t5</code> 获取到同步状态并将当前节点哨兵化，整个队列又回到最初只有一个哨兵节点的状态。当然上述的程序中各个线程是按序启动的，但实际上多线程都是并发竞争同步状态的，对于非公平锁，当一个节点被唤醒时它不一定能 <code>CAS</code> 成功，从而会继续休眠，等待下一次被唤醒。</p>
+<h3 id="四常见问题">四、常见问题</h3>
+<p>为了加深理解，下面针对自己想到或者别人提到的一些相关问题进行探讨。</p>
+<h4 id="1-为什么设置尾节点需要使用-cas-设置头节点的时候不用呢">1. 为什么设置尾节点需要使用 <code>CAS</code> 设置头节点的时候不用呢？</h4>
+<p>因为调用设置头节点的线程是获取到锁的，而任一时间内只有一条线程能拿到锁，所以不会存在其他线程与之并发，所以不需要使用 <code>CAS</code> 的方式 <code>setHead</code>。</p>
+<h4 id="2-为什么唤醒线程时遍历队列不从头节点向后遍历">2. 为什么唤醒线程时遍历队列不从头节点向后遍历？</h4>
+<p>当独占锁的线程释放锁时，将会采用逆序遍历的方式获取距离哨兵节点的最近的第一个非取消非哨兵节点作为唤醒的对象，代码在 <code>unparkSuccessor</code> 中：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unparkSuccessor</span><span style="color:#000;font-weight:bold">(</span>Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">,</span> ws<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    Node s <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Node t <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> t <span style="color:#000;font-weight:bold">!=</span> node<span style="color:#000;font-weight:bold">;</span> t <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span><span style="color:#000;font-weight:bold">)</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;=</span> 0<span style="color:#000;font-weight:bold">)</span>
+                s <span style="color:#000;font-weight:bold">=</span> t<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        LockSupport<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unpark</span><span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>在探讨作者的设计初衷前，如果让你实现这个方法时，你会怎么写呢？假如写成下面这样顺序遍历的方式会存在什么问题呢？</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unparkSuccessor</span><span style="color:#000;font-weight:bold">(</span>Node node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> ws <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ws <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        compareAndSetWaitStatus<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">,</span> ws<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    Node s <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">((</span>s <span style="color:#000;font-weight:bold">=</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">&lt;=</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    LOGGER<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;unparkSuccessor {}&#34;</span><span style="color:#000;font-weight:bold">,</span> s <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">?</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">:</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">());</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        LOGGER<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;{} 释放同步状态并唤醒 {}&#34;</span><span style="color:#000;font-weight:bold">,</span> Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">(),</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">());</span>
+        LockSupport<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unpark</span><span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>在多线程并发情况下，当一条线程在唤醒后继节点的同时，很可能会有其他线程在尝试加入等待队列，我们再回到 addWaiter 方法，</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Node <span style="color:#900;font-weight:bold">addWaiter</span><span style="color:#000;font-weight:bold">(</span>Node mode<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Node node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Node<span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">(),</span> mode<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// Try the fast path of enq; backup to full enq on failure
+</span><span style="color:#998;font-style:italic"></span>    Node pred <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>pred <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span> <span style="color:#000;font-weight:bold">=</span> pred<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetTail<span style="color:#000;font-weight:bold">(</span>pred<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+            pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    enq<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>考虑这样一种场景，我们不妨假设是在独占的公平竞争情况下：</p>
+<ol>
+<li>队列已经初始化，线程 t0 独占着同步状态，后续线程需要入队</li>
+<li>假如 t1 先来排队，并阻塞</li>
+<li>接着 t2 来排队，在 addWaiter 中执行完 compareAndSetTail 后很不巧它失去了时间片，那么 <code>pred.next = node;</code> 这一句将迟迟没有执行。</li>
+<li>接着又有一条线程 t3 来排队，排队完成并默默进入阻塞状态，这时的等待队列情况如下图所示：</li>
+<li>再接着线程 t0 释放同步状态，执行 unparkSuccessor 方法，这时如果是顺序遍历等待队列，将获取不到要唤醒的线程，因为 t1 线程所在节点的后继节点没有指向。</li>
+</ol>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/locks//Snipaste_2021-09-04_23-18-00.png">
+            <img class="mx-auto" alt="Snipaste_2021-09-04_23-18-00.png" src="/images/java/jdk/concurrent/locks//Snipaste_2021-09-04_23-18-00.png" />
+        </a>
+    </p>
+<p>我们不妨编码来模拟这样的情况，首先我们跟先前的例子一样创建 4 条线程：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">main</span><span style="color:#000;font-weight:bold">(</span>String<span style="color:#000;font-weight:bold">[]</span> args<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">throws</span> InterruptedException <span style="color:#000;font-weight:bold">{</span>
+    NonFairLock lock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> NonFairLock<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 4<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        Thread thread <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(()</span> <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                lock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;t0&#34;</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+                    TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>7<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                    TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MICROSECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>400<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>Exception e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">printStackTrace</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                lock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">});</span>
+        thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;t&#34;</span> <span style="color:#000;font-weight:bold">+</span> i<span style="color:#000;font-weight:bold">);</span>
+        TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MICROSECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">((</span>i <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">*</span> 10<span style="color:#000;font-weight:bold">);</span>
+        thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>接着我们在入队的地方 addWaiter 方法里通过 sleep 的方式手动让线程 t2 失去时间片，同时我们让 t1 的状态置为取消，因为在 release 方法里有这么一段判断 <code>if (h != null &amp;&amp; h.waitStatus != 0)</code>，而  t2 已经失去了时间片，还没将前继节点 n1 的 waitStatus 改为 -1。那么当 t0 释放同步状态时，将会唤醒 t1，t1 再释放同步状态时获取到的哨兵节点，判断到 waitStatus 等于 0，将不会调用 unparkSuccessor，而我们实验的目的就是让 t1 调用 unparkSuccessor，看是否能够获取到逻辑上应该获取到的 t2。</p>
+<p>而如果我们将  t1 节点取消，那么当 t0 释放同步状态时同样能 unparkSuccessor，但这次将不会唤醒 t1，而是往后继续遍历，这时我们将 unparkSuccessor 换成我们写的顺序遍历的方式，就能看到 t0 获取不到需要唤醒的节点。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Node <span style="color:#900;font-weight:bold">addWaiter</span><span style="color:#000;font-weight:bold">(</span>Node mode<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Node node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Node<span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">(),</span> mode<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// Try the fast path of enq; backup to full enq on failure
+</span><span style="color:#998;font-style:italic"></span>    Node pred <span style="color:#000;font-weight:bold">=</span> tail<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>pred <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">prev</span> <span style="color:#000;font-weight:bold">=</span> pred<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetTail<span style="color:#000;font-weight:bold">(</span>pred<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;t2&#34;</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                    LOGGER<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;将 {} 的状态改为取消&#34;</span><span style="color:#000;font-weight:bold">,</span> head<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">());</span>
+                    head<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">waitStatus</span> <span style="color:#000;font-weight:bold">=</span> Node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">CANCELLED</span><span style="color:#000;font-weight:bold">;</span>
+                    TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SECONDS</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>11<span style="color:#000;font-weight:bold">);</span>
+                    LOGGER<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;睡醒了&#34;</span><span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>InterruptedException e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">printStackTrace</span><span style="color:#000;font-weight:bold">();</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            pred<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    enq<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>下面是执行代码的输出，由于采用顺序遍历，所以第三行输出后看不到 t2 的信息，但实际上 t2 所在的节点已经入队。在第四行输出看到 t0 释放锁时顺序遍历获取不到需要唤醒的 t2。只有等到 t2 睡醒后自己自旋获取到同步状态。</p>
+<pre><code>INFO [t1] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [0, t1]
+INFO [t2] - 将 t1 的状态改为取消
+INFO [t3] - 进入休眠，此时队列情况 =&gt; aqs: [-1, null] &lt;=&gt; [1, t1]
+INFO [t0] - unparkSuccessor null
+INFO [t2] - 睡醒了
+INFO [t2] - 获取到同步状态 =&gt; aqs:[-1, null] &lt;=&gt; [0, t3]
+INFO [t2] - unparkSuccessor t3
+INFO [t2] - t2 释放同步状态并唤醒 t3
+INFO [t3] - 被唤醒
+INFO [t3] - 获取到同步状态 =&gt; aqs:[0, null]
+</code></pre><h3 id="五参考">五、参考</h3>
+<ul>
+<li>wiki：<a href="https:z//en.wikipedia.org/wiki/Compare-and-swap">Compare-and-swapz</a></li>
+<li><a href="https://blog.csdn.net/foxException/article/details/108917338">https://blog.csdn.net/foxException/article/details/108917338</a></li>
+</ul>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2021-06-03-hashmap-concurrency/">聊聊多线程环境下的 HashMap</a></li>
+        
+        <li><a href="/post/2020-08-25-strategy-app/">记一次在实际项目中的策略设计模式应用</a></li>
+        
+        <li><a href="/post/2020-05-30-java-spi/">一个易扩展的负载均衡组件实现</a></li>
+        
+        <li><a href="/post/2021-05-15-mvcc/">浅谈 MySQL 的 MVCC 机制</a></li>
+        
+        <li><a href="/post/2021-04-06-deadlock/">记一次工作中数据库死锁问题定位与解决</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/%E5%B9%B6%E5%8F%91'>并发</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://www.flysnow.org/" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">飞雪无情</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                <div id="secondary">
+    <section class="widget">
+        <form id="search" action='//www.google.com/search' method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="http://golb.cc/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-28-jdk-chm7/" title="JDK 源码 - ConcurrentHashMap 1.7">JDK 源码 - ConcurrentHashMap 1.7</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch">JDK 源码 - CountDownLatch</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/" title="JDK 源码 - ReentrantLock">JDK 源码 - ReentrantLock</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-10-jdk-aqs/" title="JDK 源码 - AbstractQueuedSynchronizer">JDK 源码 - AbstractQueuedSynchronizer</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/" title="聊聊多线程环境下的 HashMap">聊聊多线程环境下的 HashMap</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-05-15-mvcc/" title="浅谈 MySQL 的 MVCC 机制">浅谈 MySQL 的 MVCC 机制</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-04-06-deadlock/" title="记一次工作中数据库死锁问题定位与解决">记一次工作中数据库死锁问题定位与解决</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-06-10-jdk-compiler/" title="写给黑客的 Java 编译器不完全指南">写给黑客的 Java 编译器不完全指南</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
+<ul class="widget-list">
+    
+    <li><a href="http://golb.cc/categories/java/">Java (1)</a></li>
+    
+    <li><a href="http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/">JDK 源码 (5)</a></li>
+    
+    <li><a href="http://golb.cc/categories/mysql/">MySQL (2)</a></li>
+    
+    <li><a href="http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式 (1)</a></li>
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/tags/'>标签</a></h3>
+<div class="tagcloud">
+    
+    <a href="http://golb.cc/tags/apt/">APT</a>
+    
+    <a href="http://golb.cc/tags/ast%E5%88%86%E6%9E%90/">AST分析</a>
+    
+    <a href="http://golb.cc/tags/hashmap/">hashmap</a>
+    
+    <a href="http://golb.cc/tags/java/">Java</a>
+    
+    <a href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">MyBatis源码</a>
+    
+    <a href="http://golb.cc/tags/mysql/">MySQL</a>
+    
+    <a href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+    
+    <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">技术</a>
+    
+    <a href="http://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+    
+    <a href="http://golb.cc/tags/%E6%BA%90%E7%A0%81/">源码</a>
+    
+    <a href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">策略模式</a>
+    
+    <a href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+    
+    <a href="http://golb.cc/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">负载均衡</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="http://golb.cc/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

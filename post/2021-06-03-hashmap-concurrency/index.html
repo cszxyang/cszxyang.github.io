@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>聊聊多线程环境下的 HashMap | cszxyang</title>
+    <meta property="og:title" content="聊聊多线程环境下的 HashMap - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-06-03T10:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-06-03T10:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="聊聊多线程环境下的 HashMap">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/post/2021-06-03-hashmap-concurrency/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                <div class="col-8" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">聊聊多线程环境下的 HashMap</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年6月3日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>很久之前我写了这么一个并发异步的工具方法，传入的 <code>suppliers</code> 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 <code>supplier</code>，再通过多线程异步处理，最后统一收集完结果返回。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">&lt;</span>R<span style="color:#000;font-weight:bold">&gt;</span> Collection<span style="color:#000;font-weight:bold">&lt;</span>R<span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#900;font-weight:bold">supplyAsyncWithExpDeal</span><span style="color:#000;font-weight:bold">(</span>Collection<span style="color:#000;font-weight:bold">&lt;</span>Supplier<span style="color:#000;font-weight:bold">&lt;</span>R<span style="color:#000;font-weight:bold">&gt;&gt;</span> suppliers<span style="color:#000;font-weight:bold">,</span>
+                                                       <span style="color:#458;font-weight:bold">boolean</span> distinct<span style="color:#000;font-weight:bold">,</span> Executor executor<span style="color:#000;font-weight:bold">,</span> 
+                                                       Function<span style="color:#000;font-weight:bold">&lt;</span>Throwable<span style="color:#000;font-weight:bold">,</span> R<span style="color:#000;font-weight:bold">&gt;</span> expHandler<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Collection<span style="color:#000;font-weight:bold">&lt;</span>R<span style="color:#000;font-weight:bold">&gt;</span> res <span style="color:#000;font-weight:bold">=</span> distinct <span style="color:#000;font-weight:bold">?</span> <span style="color:#000;font-weight:bold">new</span> HashSet<span style="color:#000;font-weight:bold">&lt;&gt;()</span> <span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">new</span> ArrayList<span style="color:#000;font-weight:bold">&lt;&gt;();</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>CollectionUtils<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isNotEmpty</span><span style="color:#000;font-weight:bold">(</span>suppliers<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> Objects<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">nonNull</span><span style="color:#000;font-weight:bold">(</span>executor<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;FutureUtils.supplyAsync ==&gt; size of suppliers: {}&#34;</span><span style="color:#000;font-weight:bold">,</span> suppliers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">size</span><span style="color:#000;font-weight:bold">());</span>
+        <span style="color:#998;font-style:italic">// wait for all tasks to finish
+</span><span style="color:#998;font-style:italic"></span>        CompletableFuture<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">allOf</span><span style="color:#000;font-weight:bold">(</span>suppliers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">stream</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">filter</span><span style="color:#000;font-weight:bold">(</span>Objects<span style="color:#000;font-weight:bold">::</span>nonNull<span style="color:#000;font-weight:bold">).</span><span style="color:#008080">map</span><span style="color:#000;font-weight:bold">(</span>
+            supplier <span style="color:#000;font-weight:bold">-&gt;</span>	CompletableFuture<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">supplyAsync</span><span style="color:#000;font-weight:bold">(</span>supplier<span style="color:#000;font-weight:bold">,</span> executor<span style="color:#000;font-weight:bold">).</span><span style="color:#008080">thenApply</span><span style="color:#000;font-weight:bold">(</span>r <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>                                       <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>Objects<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">nonNull</span><span style="color:#000;font-weight:bold">(</span>r<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                    <span style="color:#998;font-style:italic">// concurrent contending point
+</span><span style="color:#998;font-style:italic"></span>                    res<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">add</span><span style="color:#000;font-weight:bold">(</span>r<span style="color:#000;font-weight:bold">);</span>
+        		<span style="color:#000;font-weight:bold">}</span>
+        		<span style="color:#000;font-weight:bold">return</span> r<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}).</span><span style="color:#008080">exceptionally</span><span style="color:#000;font-weight:bold">(</span>throwable <span style="color:#000;font-weight:bold">-&gt;</span> 
+                R r <span style="color:#000;font-weight:bold">=</span> expHandler<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">apply</span><span style="color:#000;font-weight:bold">(</span>throwable<span style="color:#000;font-weight:bold">);</span>
+                res<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">add</span><span style="color:#000;font-weight:bold">(</span>r<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">return</span> r<span style="color:#000;font-weight:bold">;</span>
+          	<span style="color:#000;font-weight:bold">})).</span><span style="color:#008080">toArray</span><span style="color:#000;font-weight:bold">(</span>CompletableFuture<span style="color:#000;font-weight:bold">[]</span> <span style="color:#000;font-weight:bold">::</span> <span style="color:#000;font-weight:bold">new</span><span style="color:#000;font-weight:bold">)).</span><span style="color:#008080">join</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> res<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>最近有同事提醒我，收集结果的地方存在潜在的并发问题，原来我的考虑是在一个方法里创建的变量是在栈里面的，所以多线程并发时，创建的 <code>res</code> 对象是不一样的，所以没有线程安全问题，但是 CompletableFuture 处理是基于线程池的，即后面在方法内部再分发任务到  <code>executor</code>  中的工作线程（我没睡醒），由于此处使用的是线程不安全的集合类，所以 add 方法存在线程安全问题，解决方案是将问题行替换为：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Collection<span style="color:#000;font-weight:bold">&lt;</span>R<span style="color:#000;font-weight:bold">&gt;</span> res <span style="color:#000;font-weight:bold">=</span> distinct <span style="color:#000;font-weight:bold">?</span> <span style="color:#000;font-weight:bold">new</span> ConcurrentHashSet<span style="color:#000;font-weight:bold">&lt;&gt;()</span> <span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">new</span> CopyOnWriteArrayList<span style="color:#000;font-weight:bold">&lt;&gt;();</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>其中因为 JDK 没有提供 ConcurrentHashSet 实现，此处的 ConcurrentHashSet 来自 hutool 工具包。</p>
+<p>然而改完之后，合代码到生产环境时，我还是有点心虚，因为我不确定为什么这样改就能高枕无忧了，先不管 List，在千千万万的博客文章中，人人都说 HashMap、HashSet、ArrayList 等等不是线程安全的，要使用相应的 JUC 包下的工具类。周遭那些整天大喊 “进大厂必背的面试题” 中必然出现的一点是，被问到 “HashMap 和 ConcurrentHashMao 的区别” 时一定要答 “HashMap 是线程安全的，ConcurrentHashMao  是非线程安全的”，那么，先不说 ConcurrentHashMao 是怎么保证线程安全的，HashMap 在多线程并发的场景下会有什么问题呢？有人说可能会出现死循环，可能会导致 CPU 100%，可能会导致丢数据，那么真的是那样吗？如果是，又是怎么出现的呢？所谓实践出真知，我们不妨自己试着一一验证，而不是人云亦云。</p>
+<h3 id="一环境准备">一、环境准备</h3>
+<p>为了模拟多线程并发的场景，我需要在源码中进行判断和控制，所以我需要能够随意地修改 HashMap 的源码，但是 JDK 是只读的，那么怎么办呢？简单，把源码及相关的依赖复制出来就行，因为人们都说 JDK 8 的 HashMap 对大部分问题进行了修复，尽管它还不是线程安全的。那我们就一步步来，先看看 1.7 版本中会有什么问题，所以我搞了个 <a href="https://www.oracle.com/java/technologies/javase/javase7-archive-downloads.html">jdk-7u80</a> 中的哈希表源码抠了出来，并进行了修改，它和一些测试代码组成的完整的工程可见 <a href="https://github.com/cszxyang/jdk7-test/tree/master/src/com/github/cszxyang/jt/util/map">这里</a>。</p>
+<h3 id="二hashmap-的运作">二、<code>HashMap</code> 的运作</h3>
+<p>JDK 1.7 中的 HashMap 采用数组作为哈希表，使用键值对节点头插成链的拉链法解决哈希冲突，当整个 HashMap 中的键值对节点超过一定阈值时，就会进行扩容，扩容的基本运作过程是，新建一个原哈希表数组双倍大小的新数组，然后（可选地）重新计算哈希值，再根据新的哈希值将节点复制到新的哈希表中，当然冲突链中的数据也通过头插法进行重新排布。</p>
+<p>对于 put 方法，主要思路是：计算哈希值得到索引，判断是否发生哈希冲突，是则遍历链，如果能找到 key 对应的值，则进行更新，否则进行插入。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> V <span style="color:#900;font-weight:bold">put</span><span style="color:#000;font-weight:bold">(</span>K key<span style="color:#000;font-weight:bold">,</span> V value<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>key <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">return</span> putForNullKey<span style="color:#000;font-weight:bold">(</span>value<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">int</span> hash <span style="color:#000;font-weight:bold">=</span> hash<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> indexFor<span style="color:#000;font-weight:bold">(</span>hash<span style="color:#000;font-weight:bold">,</span> table<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// 如果 key 已经存在，则更新 value，并返回旧值
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Entry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">=</span> table<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">];</span> e <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span> e <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Object k<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">==</span> hash <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">((</span>k <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> key <span style="color:#000;font-weight:bold">||</span> key<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>k<span style="color:#000;font-weight:bold">)))</span> <span style="color:#000;font-weight:bold">{</span>
+            V oldValue <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span><span style="color:#000;font-weight:bold">;</span>
+            e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span> <span style="color:#000;font-weight:bold">=</span> value<span style="color:#000;font-weight:bold">;</span>
+            e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">recordAccess</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">return</span> oldValue<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    modCount<span style="color:#000;font-weight:bold">++;</span>
+    <span style="color:#998;font-style:italic">// 如果 key不存在，则插入新的元素
+</span><span style="color:#998;font-style:italic"></span>    addEntry<span style="color:#000;font-weight:bold">(</span>hash<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">,</span> i<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>对于插入键值对，需要检查此时（不算上将要插入的节点）的节点数是否超过阈值，是则先进行扩容，再将新节点插到新的哈希表中。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">addEntry</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> hash<span style="color:#000;font-weight:bold">,</span> K key<span style="color:#000;font-weight:bold">,</span> V value<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> bucketIndex<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>size <span style="color:#000;font-weight:bold">&gt;=</span> threshold<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">!=</span> table<span style="color:#000;font-weight:bold">[</span>bucketIndex<span style="color:#000;font-weight:bold">]))</span> <span style="color:#000;font-weight:bold">{</span>
+        resize<span style="color:#000;font-weight:bold">(</span>2 <span style="color:#000;font-weight:bold">*</span> table<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">);</span>
+        hash <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">!=</span> key<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">?</span> hash<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">:</span> 0<span style="color:#000;font-weight:bold">;</span>
+        bucketIndex <span style="color:#000;font-weight:bold">=</span> indexFor<span style="color:#000;font-weight:bold">(</span>hash<span style="color:#000;font-weight:bold">,</span> table<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    createEntry<span style="color:#000;font-weight:bold">(</span>hash<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">,</span> bucketIndex<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>对于扩容，先计算出新的数组的长度（原表长度的两倍）并创建新数组，然后将数据从原数组搬运过去。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">resize</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> newCapacity<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Entry<span style="color:#000;font-weight:bold">[]</span> oldTable <span style="color:#000;font-weight:bold">=</span> table<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> oldCapacity <span style="color:#000;font-weight:bold">=</span> oldTable<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">...</span>
+    Entry<span style="color:#000;font-weight:bold">[]</span> newTable <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Entry<span style="color:#000;font-weight:bold">[</span>newCapacity<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">...</span>
+    transfer<span style="color:#000;font-weight:bold">(</span>newTable<span style="color:#000;font-weight:bold">,</span> rehash<span style="color:#000;font-weight:bold">);</span>
+    table <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">;</span>
+    threshold <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span>Math<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">min</span><span style="color:#000;font-weight:bold">(</span>newCapacity <span style="color:#000;font-weight:bold">*</span> loadFactor<span style="color:#000;font-weight:bold">,</span> MAXIMUM_CAPACITY <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>对于搬运数据，需要遍历原数组及冲突链，进行重新哈希（如果需要的话）得到新的下标，然后进行搬运，一样地使用头插法排布节点。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">transfer</span><span style="color:#000;font-weight:bold">(</span>Entry<span style="color:#000;font-weight:bold">[]</span> newTable<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> rehash<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> newCapacity <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> cnt <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Entry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">:</span> table<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">while</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">!=</span> e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            Entry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> next <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>rehash<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">==</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span> <span style="color:#000;font-weight:bold">?</span> 0 <span style="color:#000;font-weight:bold">:</span> hash<span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> indexFor<span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span><span style="color:#000;font-weight:bold">,</span> newCapacity<span style="color:#000;font-weight:bold">);</span>
+            e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">];</span>
+            newTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">;</span>
+            e <span style="color:#000;font-weight:bold">=</span> next<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="三场景模拟">三、场景模拟</h3>
+<p>很多人说多线程环境下哈希表的扩容操作并发时，会出现节点成环的情况，从而在 get 某个节点的时候出现死循环，但他们没有给出实际的 debug 过程，我们不妨来尝试模拟这种场景。</p>
+<p>HashMap 的实时容量记为 size，扩容阈值为 threshold，如果 size &gt;= threshold，则进行扩容，其中 threshold = capacity * loadFactor，capacity 为用户指定的表大小，如果不指定则默认为 16，loadFactor 可理解为一个比例，即达到百分之多少进行扩容，默认地 loadFactor = 0.8，为了便于测试，我们将 capacity 设为 4，loadFactor 设为 1.0，并进行数据初始化。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">final</span> HashMap<span style="color:#000;font-weight:bold">&lt;</span>CustomKey<span style="color:#000;font-weight:bold">,</span> String<span style="color:#000;font-weight:bold">&gt;</span> map <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashMap<span style="color:#000;font-weight:bold">&lt;&gt;(</span>4<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">final</span> CustomKey k1 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> CustomKey<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;a&#34;</span><span style="color:#000;font-weight:bold">);</span>
+CustomKey k2 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> CustomKey<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;b&#34;</span><span style="color:#000;font-weight:bold">);</span>
+CustomKey k3 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> CustomKey<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;c&#34;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">final</span> CustomKey k4 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> CustomKey<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;d&#34;</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">final</span> CustomKey k5 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> CustomKey<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;e&#34;</span><span style="color:#000;font-weight:bold">);</span>
+map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k1<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;aa&#34;</span><span style="color:#000;font-weight:bold">);</span>
+map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k2<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;bb&#34;</span><span style="color:#000;font-weight:bold">);</span>
+map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k3<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;cc&#34;</span><span style="color:#000;font-weight:bold">);</span>
+map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k4<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;dd&#34;</span><span style="color:#000;font-weight:bold">);</span>
+
+<span style="color:#000;font-weight:bold">final</span> HashMap<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">Entry</span><span style="color:#000;font-weight:bold">&lt;</span>CustomKey<span style="color:#000;font-weight:bold">,</span> String<span style="color:#000;font-weight:bold">&gt;[]</span> table <span style="color:#000;font-weight:bold">=</span> map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">table</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>HashMap<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">Entry</span><span style="color:#000;font-weight:bold">&lt;</span>CustomKey<span style="color:#000;font-weight:bold">,</span> String<span style="color:#000;font-weight:bold">&gt;</span> customKeyStringEntry <span style="color:#000;font-weight:bold">:</span> table<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    System<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">out</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">println</span><span style="color:#000;font-weight:bold">(</span>customKeyStringEntry<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>其中，CustomKey 是我自定义的一个类，作为键值对的键对象。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">CustomKey</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">int</span> hashCode<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> String uid<span style="color:#000;font-weight:bold">;</span>
+    
+	<span style="color:#998;font-style:italic">// constructors...
+</span><span style="color:#998;font-style:italic"></span>    
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">hashCode</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">return</span> hashCode<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">equals</span><span style="color:#000;font-weight:bold">(</span>Object o<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span> <span style="color:#000;font-weight:bold">==</span> o<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>o <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> getClass<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">!=</span> o<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClass</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        CustomKey customKey <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>CustomKey<span style="color:#000;font-weight:bold">)</span> o<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">return</span> Objects<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>uid<span style="color:#000;font-weight:bold">,</span> customKey<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">uid</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">toString</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">return</span> uid<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>不得不提的是，HashMap 的哈希函数如下所示，很显然这个算法是跟对象的 hashCode 有关的，所以为了模拟哈希冲突，我需要能够控制每个测试对象的 hashCode，所以将之作为类的属性之一。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">hash</span><span style="color:#000;font-weight:bold">(</span>Object k<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> h <span style="color:#000;font-weight:bold">=</span> hashSeed<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>0 <span style="color:#000;font-weight:bold">!=</span> h <span style="color:#000;font-weight:bold">&amp;&amp;</span> k <span style="color:#000;font-weight:bold">instanceof</span> String<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">return</span> sun<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">misc</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">Hashing</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">stringHash32</span><span style="color:#000;font-weight:bold">((</span>String<span style="color:#000;font-weight:bold">)</span> k<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    h <span style="color:#000;font-weight:bold">^=</span> k<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hashCode</span><span style="color:#000;font-weight:bold">();</span>
+
+    <span style="color:#998;font-style:italic">// This function ensures that hashCodes that differ only by
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">// constant multiples at each bit position have a bounded
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">// number of collisions (approximately 8 at default load factor).
+</span><span style="color:#998;font-style:italic"></span>    h <span style="color:#000;font-weight:bold">^=</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> 20<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">^</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> 12<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> h <span style="color:#000;font-weight:bold">^</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> 7<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">^</span> <span style="color:#000;font-weight:bold">(</span>h <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> 4<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>另外，结合前面的 <code>put</code> 函数，如果 <code>e.hash == hash &amp;&amp; ((k = e.key) == key || key.equals(k))</code>，则认为该键对象已经存在，而不是认为发生哈希冲突，所以我还需够重写 equals 方法，</p>
+<p>因为默认地，所有对象的 equals 都继承自 Object 中的 equals 方法（比对堆地址），所以，如果一个类重写了 equals 方法，通过类的属性组合而不是地址作为对象的唯一性特征（即如果两个对象的各项特性一样，那么我们认为它们是 equals 的）时，那么新增元素会按照各个属性维度判断键值对是否已经存在，从而不往其中插入键一样的键值对，我们重写了 equals，那么往往还需要重写 hashCode 方法，结合对象的各个属性来计算 hashCode，因为前面的 <code>e.hash == hash &amp;&amp; ((k = e.key) == key || key.equals(k))</code> 判断才会认为两个属性相同的对象可认为同一对象。总有人说，如果重写了类的 equals 方法，一定要重写 hashCode 方法，但是倘若这个类的对象不作为哈希表的键，那么这个所谓的 “准测” 看起来让人觉得十二分莫名其妙。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">equals</span><span style="color:#000;font-weight:bold">(</span>Object obj<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span> <span style="color:#000;font-weight:bold">==</span> obj<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>按照上面的理解，我们的 hashCode 方法应该由对象的各个属性决定的，但是为了模拟哈希冲突，我故意为多个对象设置了一样的 hashCode，让它们排成一条链表。为了便于观察，我重写了 <code>HashMap.Entry </code> 的 toString 方法，对冲突链进行格式化。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#3c5d5d;font-weight:bold">@Override</span>
+<span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">toString</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    StringBuilder res <span style="color:#000;font-weight:bold">=</span>  <span style="color:#000;font-weight:bold">new</span> StringBuilder<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;{&#34;</span> <span style="color:#000;font-weight:bold">+</span> key <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;, &#34;</span> <span style="color:#000;font-weight:bold">+</span> value <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;, &#34;</span> <span style="color:#000;font-weight:bold">+</span> hash <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;}&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>next <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        res<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34; -&gt; &#34;</span><span style="color:#000;font-weight:bold">);</span>
+        res<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span>next<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">());</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> res<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>看下上面我们构建的哈希表输出：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">null</span>
+<span style="color:#000;font-weight:bold">{</span>d<span style="color:#000;font-weight:bold">,</span> dd<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>c<span style="color:#000;font-weight:bold">,</span> cc<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>b<span style="color:#000;font-weight:bold">,</span> bb<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">{</span>a<span style="color:#000;font-weight:bold">,</span> aa<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">null</span>
+<span style="color:#000;font-weight:bold">null</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>现在整个哈希表的数据状态大致如下所示：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_11-35-42.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_11-35-42.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_11-35-42.png" />
+        </a>
+    </p>
+<p>由于扩容阈值是 4，所以当我们再尝试往其中添加一个 hash 到 1 号桶下标的键值对 {e, ee} 的时候，将会触发扩容，倘若正巧有多个线程在扩容操作中并发，那么会发生什么呢？我们假设现在有两条线程并发插入一个键值对到同一位置，触发扩容。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Thread t1 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Runnable<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">run</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        ThreadUtils<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span>
+        map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k5<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;ee&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">});</span>
+t1<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T1&#34;</span><span style="color:#000;font-weight:bold">);</span>
+Thread t2 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Runnable<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">run</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k5<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;ee&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">});</span>
+t2<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T2&#34;</span><span style="color:#000;font-weight:bold">);</span>
+t2<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+t1<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="四分析与测试">四、分析与测试</h3>
+<p>对于上面的场景，因为线程 T1 启动后即进行了一秒休眠，记其后的某个 t1 时间点，线程 T2 先进入扩容方法，它创建了一个新的数组，并尝试将旧数组中的数据搬运到新数组中，此时其时间片用完，上下文切换到线程 T1 上。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-10_10-13-20.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_11-47-37.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-10_10-13-20.png" />
+        </a>
+    </p>
+<p>为了模拟线程 T2 用完时间片，我们在它遍历 {d, dd} 这个节点的时候让它陷入休眠，注意此时它的栈空间中持有了 e 和 next 句柄指向。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">transfer</span><span style="color:#000;font-weight:bold">(</span>Entry<span style="color:#000;font-weight:bold">[]</span> newTable<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> rehash<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">int</span> newCapacity <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> cnt <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Entry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">:</span> table<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">while</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">!=</span> e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            Entry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> next <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#998;font-style:italic">// 线程 2 陷入此处，e = dd，next = cc
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>cnt <span style="color:#000;font-weight:bold">==</span> 0  <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#d14">&#34;T2&#34;</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">==</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                System<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">out</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">println</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T2进入休眠&#34;</span><span style="color:#000;font-weight:bold">);</span>
+                ThreadUtils<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>2<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>rehash<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">==</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span> <span style="color:#000;font-weight:bold">?</span> 0 <span style="color:#000;font-weight:bold">:</span> hash<span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> indexFor<span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span><span style="color:#000;font-weight:bold">,</span> newCapacity<span style="color:#000;font-weight:bold">);</span>
+            e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span> <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">];</span>
+            newTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">;</span>
+            e <span style="color:#000;font-weight:bold">=</span> next<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>接下来在 t2 时间段内，线程 T1 尝试放入  {e, ee}，同样地也会触发扩容，在 resize 方法中创建自己的新数组，然后进行数据搬运，让我们来看看数据搬运的过程：</p>
+<p>在遍历过程中，首先 e 和 next 分别指向 {d, dd} 和 {c, cc} 节点，然后 {d, dd} 和 {c, cc} 间的指针断开，{d, dd} 被拷贝到了新数组上，e 指针向前移动。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-10_10-14-55.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_12-43-36.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-10_10-14-55.png" />
+        </a>
+    </p>
+<p>经过多轮迭代，最后两个数组的情况如下所示：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_12-50-03.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_12-50-03.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_12-50-03.png" />
+        </a>
+    </p>
+<p>假设在此时开始的 t3 时间内，线程 T1 失去时间片，线程 T2 苏醒并继续它未完成的任务，我们在 table 赋值的地方对线程 T1 进行休眠处理：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">resize</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> newCapacity<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Entry<span style="color:#000;font-weight:bold">[]</span> oldTable <span style="color:#000;font-weight:bold">=</span> table<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> oldCapacity <span style="color:#000;font-weight:bold">=</span> oldTable<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>oldCapacity <span style="color:#000;font-weight:bold">==</span> MAXIMUM_CAPACITY<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        threshold <span style="color:#000;font-weight:bold">=</span> Integer<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">MAX_VALUE</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    Entry<span style="color:#000;font-weight:bold">[]</span> newTable <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Entry<span style="color:#000;font-weight:bold">[</span>newCapacity<span style="color:#000;font-weight:bold">];</span>
+    transfer<span style="color:#000;font-weight:bold">(</span>newTable<span style="color:#000;font-weight:bold">,</span> initHashSeedAsNeeded<span style="color:#000;font-weight:bold">(</span>newCapacity<span style="color:#000;font-weight:bold">));</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T1&#34;</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+        System<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">out</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">println</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T1进入休眠&#34;</span><span style="color:#000;font-weight:bold">);</span>
+        ThreadUtils<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">sleep</span><span style="color:#000;font-weight:bold">(</span>6<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    table <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">;</span>
+    threshold <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)</span>Math<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">min</span><span style="color:#000;font-weight:bold">(</span>newCapacity <span style="color:#000;font-weight:bold">*</span> loadFactor<span style="color:#000;font-weight:bold">,</span> MAXIMUM_CAPACITY <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>前面我们提到，线程 T2 已经持有了自己 e 和 next 句柄，分别指向 {d, dd} 和 {c, cc} 节点，但是由于线程  T1 在数据搬运过程中颠覆了整条链的指针指向情况，尽管数据搬运是一个拷贝过程，但是拷贝也分为深拷贝和浅拷贝，此处的拷贝属于浅拷贝！所以此时对于线程 T2 来说，它看到的情况是这样的：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_13-00-49.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_13-00-49.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_13-00-49.png" />
+        </a>
+    </p>
+<p>然后它尝试进行搬运，{d, dd} 被浅拷贝到新数组的下标为 1 的桶口，e 指向 next 记录的 {c, cc} 节点，而在下一个循环的开始时，next 指向原 {c, cc} 的下一个节点，因为是引用指向，所以 next 指向了线程 T1 中的新数组中的冲突链表记录的 {d, dd} 节点。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_13-57-31.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_13-57-31.png" />
+        </a>
+    </p>
+<p>于是 {c, cc} 节点理所当然地被头插到 1 号桶口，其 next 指针指向了 {d, dd} 节点，接下来，e 指向了原局部变量 next 指向的 {d, dd}，下一次迭代进来会尝试将 {d, dd} 头插到 {c, cc} 前面，而 {c, cc} 的 next 指针已经指向了 {d, dd}，从而出现了循环引用的情况，试想如果此时线程 T2 调用 get 方法，那么将会触发死循环。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_14-02-34.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_14-02-34.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_14-02-34.png" />
+        </a>
+    </p>
+<p>我们尝试在线程 T2 中调用 get 方法进行测试：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">Thread t2 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Runnable<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">run</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k5<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;ee&#34;</span><span style="color:#000;font-weight:bold">);</span>
+        map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(</span>k1<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">});</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>为了结果直观化，我尝试将运行过程做成了 gif，看着还挺好玩。结果也很明显，的确出现了死循环。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/deadloop.gif">
+            <img class="mx-auto" alt="deadloop.gif" src="/images/java/jdk/hashmap/deadloop.gif" />
+        </a>
+    </p>
+<p>与此同时，我们打开任务管理器查看 CPU 运行情况，可以看到 CPU 利用率已经去到了 100%，把程序停掉后恢复正常。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_15-00-43.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_15-00-43.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_15-00-43.png" />
+        </a>
+    </p>
+<blockquote>
+<p>如果线上环境出现 CPU 利用飙升的情况，对于 Windows服务器，通过 <code>tasklist</code> 命令拿到 JVM 的 PID，</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_17-53-30.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_17-53-30.png" />
+        </a>
+    </p>
+<p>然后使用 jstack 查看线程运行情况，然后定位到具体的代码位置。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/hashmap/Snipaste_2021-06-03_17-47-49.png">
+            <img class="mx-auto" alt="Snipaste_2021-06-03_17-47-49.png" src="/images/java/jdk/hashmap/Snipaste_2021-06-03_17-47-49.png" />
+        </a>
+    </p>
+<p>对于 Linux 服务器，可以使用 <code>top -p 265 -H</code> 命令查看 CPU 占用率高的进程，如果是 JVM 进程，拿到其 10 进制的 pid，然后通过 <code>printf &quot;%x&quot; xx</code> 转成十六进制，再使用 jstack 查看线程运行状况。</p>
+</blockquote>
+<p>试想如果极端一点，某个系统的并发量极高，同一时刻有 100 条像 T2 这样的线程在成环的冲突链表上调用 get 方法，那么服务的可用性将会受到极大的威胁。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 2<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 102<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+    Thread t2 <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Thread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Runnable<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+        <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">run</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+            map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>k5<span style="color:#000;font-weight:bold">,</span> <span style="color:#d14">&#34;ee&#34;</span><span style="color:#000;font-weight:bold">);</span>
+            map<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(</span>k1<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">});</span>
+    t2<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setName</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;T&#34;</span> <span style="color:#000;font-weight:bold">+</span> i<span style="color:#000;font-weight:bold">);</span>
+    t2<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="五总结">五、总结</h3>
+<p>JDK 1.7 版本的 HashMap 由于没有做同步控制（事实上，它的设计初衷本身不是用于并发场景），所以需要避免在多线程环境下使用它来存储数据，因为在多线程并发扩容的时候，由于采用头插法及浅拷贝，会导致数据丢失及节点循环引用的情况，从而在后续调用 get 方法时触发死循环。</p>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2020-08-25-strategy-app/">记一次在实际项目中的策略设计模式应用</a></li>
+        
+        <li><a href="/post/2020-05-30-java-spi/">一个易扩展的负载均衡组件实现</a></li>
+        
+        <li><a href="/post/2021-05-15-mvcc/">浅谈 MySQL 的 MVCC 机制</a></li>
+        
+        <li><a href="/post/2021-04-06-deadlock/">记一次工作中数据库死锁问题定位与解决</a></li>
+        
+        <li><a href="/post/2020-06-10-jdk-compiler/">写给黑客的 Java 编译器不完全指南</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/hashmap'>hashmap</a></li>
+                
+                <li><a href='/tags/%E5%B9%B6%E5%8F%91'>并发</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://www.flysnow.org/" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">飞雪无情</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                <div id="secondary">
+    <section class="widget">
+        <form id="search" action='//www.google.com/search' method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="http://golb.cc/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-28-jdk-chm7/" title="JDK 源码 - ConcurrentHashMap 1.7">JDK 源码 - ConcurrentHashMap 1.7</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch">JDK 源码 - CountDownLatch</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/" title="JDK 源码 - ReentrantLock">JDK 源码 - ReentrantLock</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-10-jdk-aqs/" title="JDK 源码 - AbstractQueuedSynchronizer">JDK 源码 - AbstractQueuedSynchronizer</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/" title="聊聊多线程环境下的 HashMap">聊聊多线程环境下的 HashMap</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-05-15-mvcc/" title="浅谈 MySQL 的 MVCC 机制">浅谈 MySQL 的 MVCC 机制</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-04-06-deadlock/" title="记一次工作中数据库死锁问题定位与解决">记一次工作中数据库死锁问题定位与解决</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-06-10-jdk-compiler/" title="写给黑客的 Java 编译器不完全指南">写给黑客的 Java 编译器不完全指南</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
+<ul class="widget-list">
+    
+    <li><a href="http://golb.cc/categories/java/">Java (1)</a></li>
+    
+    <li><a href="http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/">JDK 源码 (5)</a></li>
+    
+    <li><a href="http://golb.cc/categories/mysql/">MySQL (2)</a></li>
+    
+    <li><a href="http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式 (1)</a></li>
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/tags/'>标签</a></h3>
+<div class="tagcloud">
+    
+    <a href="http://golb.cc/tags/apt/">APT</a>
+    
+    <a href="http://golb.cc/tags/ast%E5%88%86%E6%9E%90/">AST分析</a>
+    
+    <a href="http://golb.cc/tags/hashmap/">hashmap</a>
+    
+    <a href="http://golb.cc/tags/java/">Java</a>
+    
+    <a href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">MyBatis源码</a>
+    
+    <a href="http://golb.cc/tags/mysql/">MySQL</a>
+    
+    <a href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+    
+    <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">技术</a>
+    
+    <a href="http://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+    
+    <a href="http://golb.cc/tags/%E6%BA%90%E7%A0%81/">源码</a>
+    
+    <a href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">策略模式</a>
+    
+    <a href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+    
+    <a href="http://golb.cc/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">负载均衡</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="http://golb.cc/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

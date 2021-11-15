@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>MySQL on cszxyang</title>
+    <link>http://golb.cc/categories/mysql/</link>
+    <description>Recent content in MySQL on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Fri, 14 May 2021 10:54:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/categories/mysql/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>浅谈 MySQL 的 MVCC 机制</title>
+      <link>http://golb.cc/post/2021-05-15-mvcc/</link>
+      <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-05-15-mvcc/</guid>
+      <description>&lt;p&gt;最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>记一次工作中数据库死锁问题定位与解决</title>
+      <link>http://golb.cc/post/2021-04-06-deadlock/</link>
+      <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-04-06-deadlock/</guid>
+      <description>&lt;p&gt;最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

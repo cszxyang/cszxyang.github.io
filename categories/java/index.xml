@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Java on cszxyang</title>
+    <link>http://golb.cc/categories/java/</link>
+    <description>Recent content in Java on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sat, 30 May 2020 09:50:24 +0200</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/categories/java/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>一个易扩展的负载均衡组件实现</title>
+      <link>http://golb.cc/post/2020-05-30-java-spi/</link>
+      <pubDate>Sat, 30 May 2020 09:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-05-30-java-spi/</guid>
+      <description>&lt;p&gt;最近在看微博的 motan 的源码，其中使用了 SPI 和模板方法设计模式实现负载均衡组件，觉得比较有意思，所以把它单独拿出来研究，不过 motan 的实现封装得有点复杂，所以我想介绍 SPI、模板方法设计模式及一些常见的负载均衡算法相关的知识，然后再基于这些知识自己实现一个类似的易扩展的负载均衡组件。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

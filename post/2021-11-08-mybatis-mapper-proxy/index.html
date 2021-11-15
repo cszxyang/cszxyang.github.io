@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>MyBatis 源码 - Mapper 的动态代理实现过程 | cszxyang</title>
+    <meta property="og:title" content="MyBatis 源码 - Mapper 的动态代理实现过程 - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-11-08T10:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-11-08T10:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="MyBatis 源码 - Mapper 的动态代理实现过程">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                <div class="col-8" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">MyBatis 源码 - Mapper 的动态代理实现过程</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年11月8日
+        </date>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>本文通过源码分析了解 MyBatis 的 Mapper 动态代理的实现原理。</p>
+<p>在使用 Mabatis 时往往需要有成对出现的 <code>.java</code> 后缀格式 Mapper 接口文件及 <code>.xml</code> 后缀格式的 XML 文件，其中 XML 文件放在资源目录，而 Java 文件自然挡在运行目录，通过调用 Mapper 接口中定义的方法就能触发到其通过 namespace 关联的 XML 文件中的 SQL 语句，从而实现了业务逻辑与数据库交互的解耦，避免像传统 JDBC 编程那样在 Java 代码中写 SQL 与数据库交互，那么 Mybtis 是怎么将 Mapper 接口方法与 XML 中 SQL 语句进行绑定与触发的呢？下面我们通过测试方法 debug 调试进行进行代码跟踪。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">ProxyTest</span> <span style="color:#000;font-weight:bold">{</span>
+
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Logger logger <span style="color:#000;font-weight:bold">=</span> LoggerFactory<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getLogger</span><span style="color:#000;font-weight:bold">(</span>ExecutorTest<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#000;font-weight:bold">private</span> Configuration configuration<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> Connection connection<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> JdbcTransaction jdbcTransaction<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> SqlSessionFactory sqlSessionFactory<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Before</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">init</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">throws</span> SQLException <span style="color:#000;font-weight:bold">{</span>
+        SqlSessionFactoryBuilder factoryBuilder <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> SqlSessionFactoryBuilder<span style="color:#000;font-weight:bold">();</span>
+        sqlSessionFactory <span style="color:#000;font-weight:bold">=</span> factoryBuilder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">build</span><span style="color:#000;font-weight:bold">(</span>ExecutorTest<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getResourceAsStream</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;/mybatis/mybatis-config.xml&#34;</span><span style="color:#000;font-weight:bold">));</span>
+        configuration <span style="color:#000;font-weight:bold">=</span> sqlSessionFactory<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getConfiguration</span><span style="color:#000;font-weight:bold">();</span>
+        connection <span style="color:#000;font-weight:bold">=</span> DriverManager<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getConnection</span><span style="color:#000;font-weight:bold">(</span>JDBC<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">url</span><span style="color:#000;font-weight:bold">,</span> JDBC<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">username</span><span style="color:#000;font-weight:bold">,</span> JDBC<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">password</span><span style="color:#000;font-weight:bold">);</span>
+        jdbcTransaction <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> JdbcTransaction<span style="color:#000;font-weight:bold">(</span>connection<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Test</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">testProxy</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">throws</span> SQLException <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">(</span>SqlSession sqlSession <span style="color:#000;font-weight:bold">=</span> sqlSessionFactory<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">openSession</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+            UserMapper userMapper <span style="color:#000;font-weight:bold">=</span> sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getMapper</span><span style="color:#000;font-weight:bold">(</span>UserMapper<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">);</span>
+            User user <span style="color:#000;font-weight:bold">=</span> userMapper<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">selectUser</span><span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span>
+            System<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">out</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">println</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;User : &#34;</span> <span style="color:#000;font-weight:bold">+</span> user<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="mapper-接口注册">Mapper 接口注册</h3>
+<p>首先在 ProxyTest#init 方法中会触发 SqlSessionFactoryBuilder#build 方法进行配置文件解析，SqlSessionFactoryBuilder 顾名思义是 SqlSessionFactory 构造器，SqlSessionFactory 是生产 SqlSession 的工厂，SqlSessionFactoryBuilder 通过解析配置信息构造具体相应特性的 SqlSessionFactory，从而生产具有不同特性的 SqlSession 对象。按我理解，不同的特性，归根到底体现在 Configuration 对象的差异。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_17-41-31.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_17-41-31.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_17-41-31.png" />
+        </a>
+    </p>
+<p>XMLConfigBuilder 的 parseConfiguration 方法会解析 XML 文件中的各种标签，其中包括 <code>mappers</code> 标签。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_17-50-13.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_17-50-13.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_17-50-13.png" />
+        </a>
+    </p>
+<p>在 mapperElement 方法中会匹配 mapper 的配置方式，然后根据不同方式去读取 Mapper 的内容，</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-10-18.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_18-10-18.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-10-18.png" />
+        </a>
+    </p>
+<p>由于我在 mavatis-config.xml 中以 resource 属性指定 mapper 的 XML 文件，所以上述代码会进入第一个 if 分支，以 resource 方式构造 XMLMapperBuilder 对象，然后进入 XMLMapperBuilder 的 parse 方法。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#000080">&lt;mappers&gt;</span>
+    <span style="color:#000080">&lt;mapper</span> <span style="color:#008080">resource=</span><span style="color:#d14">&#34;mybatis/UserMapper.xml&#34;</span><span style="color:#000080">/&gt;</span>
+    <span style="color:#000080">&lt;mapper</span> <span style="color:#008080">resource=</span><span style="color:#d14">&#34;mybatis/ContainerMapper.xml&#34;</span><span style="color:#000080">/&gt;</span>
+<span style="color:#000080">&lt;/mappers&gt;</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="xmlmapperbuilder-的-parse-方法">XMLMapperBuilder 的 parse 方法</h3>
+<p>这个方法主要有关键的两步，第一步是解析 mapper 文件中的各个 SQL 相关的标签，最终整合成一个类似 <code>&lt;标签id，Statement&gt;</code> 之类的映射表，第二步是为Mapper 绑定代理工厂。</p>
+<p>当触发 Mapper 方法时会通过 Mapper 的 Class 信息获取代理工厂并生成代理对象，这个代理对象中会缓存 mapper 方法与具体方法调用器的关系，类似  <code>&lt;method, invoker&gt;</code> 之类的映射，具体的触发逻辑交给相应的 invoker 实现，invoker 会使用到前面第一步中缓存的  <code>&lt;标签id，Statement&gt;</code> 的映射，拿到方法对应的 Statement 就能触发相应的 SQL 指令了。下面我们先看前两步。</p>
+<h4 id="解析与配置-statement">解析与配置 Statement</h4>
+<p>XMLMapperBuilder#configurationElement 方法解析 mapper 节点信息</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-09_15-29-44.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-09_15-29-44.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-09_15-29-44.png" />
+        </a>
+    </p>
+<p>XMLMapperBuilder#configurationElement 方法中调用 XMLMapperBuilder#buildStatementFromContext 方法解析一个 mapper 文件中所有的 SQL 语句对应的节点，然后在复写方法中遍历节点集，然后为每个节点创建一个 XMLStatementBuilder 去解析其中的内容，得到一个对应的 MappedStatement 。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-09_15-31-28.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-09_15-31-28.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-09_15-31-28.png" />
+        </a>
+    </p>
+<p>parseStatementNode 方法顾名思义就是解析一个 XML 语句标签的内容，得到一个 MappedStatement  对象。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">parseStatementNode</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    String id <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;id&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String databaseId <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;databaseId&#34;</span><span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>databaseIdMatchesCurrent<span style="color:#000;font-weight:bold">(</span>id<span style="color:#000;font-weight:bold">,</span> databaseId<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">requiredDatabaseId</span><span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#998;font-style:italic">// select 或 delete 或 update 等
+</span><span style="color:#998;font-style:italic"></span>    String nodeName <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getNode</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getNodeName</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#998;font-style:italic">// SqlCommandType 枚举，对应 DML 类型
+</span><span style="color:#998;font-style:italic"></span>    SqlCommandType sqlCommandType <span style="color:#000;font-weight:bold">=</span> SqlCommandType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">valueOf</span><span style="color:#000;font-weight:bold">(</span>nodeName<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toUpperCase</span><span style="color:#000;font-weight:bold">(</span>Locale<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">ENGLISH</span><span style="color:#000;font-weight:bold">));</span>
+    <span style="color:#458;font-weight:bold">boolean</span> isSelect <span style="color:#000;font-weight:bold">=</span> sqlCommandType <span style="color:#000;font-weight:bold">==</span> SqlCommandType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SELECT</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">boolean</span> flushCache <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getBooleanAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;flushCache&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">!</span>isSelect<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">boolean</span> useCache <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getBooleanAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;useCache&#34;</span><span style="color:#000;font-weight:bold">,</span> isSelect<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">boolean</span> resultOrdered <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getBooleanAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;resultOrdered&#34;</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// Include Fragments before parsing
+</span><span style="color:#998;font-style:italic"></span>    XMLIncludeTransformer includeParser <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> XMLIncludeTransformer<span style="color:#000;font-weight:bold">(</span>configuration<span style="color:#000;font-weight:bold">,</span> builderAssistant<span style="color:#000;font-weight:bold">);</span>
+    includeParser<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">applyIncludes</span><span style="color:#000;font-weight:bold">(</span>context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getNode</span><span style="color:#000;font-weight:bold">());</span>
+
+    String parameterType <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;parameterType&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> parameterTypeClass <span style="color:#000;font-weight:bold">=</span> resolveClass<span style="color:#000;font-weight:bold">(</span>parameterType<span style="color:#000;font-weight:bold">);</span>
+
+    String lang <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;lang&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    LanguageDriver langDriver <span style="color:#000;font-weight:bold">=</span> getLanguageDriver<span style="color:#000;font-weight:bold">(</span>lang<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// Parse selectKey after includes and remove them.
+</span><span style="color:#998;font-style:italic"></span>    processSelectKeyNodes<span style="color:#000;font-weight:bold">(</span>id<span style="color:#000;font-weight:bold">,</span> parameterTypeClass<span style="color:#000;font-weight:bold">,</span> langDriver<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// Parse the SQL (pre: &lt;selectKey&gt; and &lt;include&gt; were parsed and removed)
+</span><span style="color:#998;font-style:italic"></span>    KeyGenerator keyGenerator<span style="color:#000;font-weight:bold">;</span>
+    String keyStatementId <span style="color:#000;font-weight:bold">=</span> id <span style="color:#000;font-weight:bold">+</span> SelectKeyGenerator<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SELECT_KEY_SUFFIX</span><span style="color:#000;font-weight:bold">;</span>
+    keyStatementId <span style="color:#000;font-weight:bold">=</span> builderAssistant<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">applyCurrentNamespace</span><span style="color:#000;font-weight:bold">(</span>keyStatementId<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>configuration<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hasKeyGenerator</span><span style="color:#000;font-weight:bold">(</span>keyStatementId<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        keyGenerator <span style="color:#000;font-weight:bold">=</span> configuration<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getKeyGenerator</span><span style="color:#000;font-weight:bold">(</span>keyStatementId<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+        keyGenerator <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getBooleanAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;useGeneratedKeys&#34;</span><span style="color:#000;font-weight:bold">,</span>
+                                                   configuration<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isUseGeneratedKeys</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> SqlCommandType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INSERT</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>sqlCommandType<span style="color:#000;font-weight:bold">))</span>
+            <span style="color:#000;font-weight:bold">?</span> Jdbc3KeyGenerator<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INSTANCE</span> <span style="color:#000;font-weight:bold">:</span> NoKeyGenerator<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INSTANCE</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+	<span style="color:#998;font-style:italic">// 解析具体的 SQL 语句
+</span><span style="color:#998;font-style:italic"></span>    SqlSource sqlSource <span style="color:#000;font-weight:bold">=</span> langDriver<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">createSqlSource</span><span style="color:#000;font-weight:bold">(</span>configuration<span style="color:#000;font-weight:bold">,</span> context<span style="color:#000;font-weight:bold">,</span> parameterTypeClass<span style="color:#000;font-weight:bold">);</span>
+    StatementType statementType <span style="color:#000;font-weight:bold">=</span> StatementType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">valueOf</span><span style="color:#000;font-weight:bold">(</span>context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;statementType&#34;</span><span style="color:#000;font-weight:bold">,</span> StatementType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">PREPARED</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">()));</span>
+    Integer fetchSize <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getIntAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;fetchSize&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    Integer timeout <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getIntAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;timeout&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String parameterMap <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;parameterMap&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String resultType <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;resultType&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> resultTypeClass <span style="color:#000;font-weight:bold">=</span> resolveClass<span style="color:#000;font-weight:bold">(</span>resultType<span style="color:#000;font-weight:bold">);</span>
+    String resultMap <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;resultMap&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String resultSetType <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;resultSetType&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    ResultSetType resultSetTypeEnum <span style="color:#000;font-weight:bold">=</span> resolveResultSetType<span style="color:#000;font-weight:bold">(</span>resultSetType<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>resultSetTypeEnum <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        resultSetTypeEnum <span style="color:#000;font-weight:bold">=</span> configuration<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getDefaultResultSetType</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    String keyProperty <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;keyProperty&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String keyColumn <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;keyColumn&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    String resultSets <span style="color:#000;font-weight:bold">=</span> context<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getStringAttribute</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;resultSets&#34;</span><span style="color:#000;font-weight:bold">);</span>
+	<span style="color:#998;font-style:italic">// 通过下面的参数构建 MappedStatement，并添加到 Configuration 的 mappedStatements 映射表中
+</span><span style="color:#998;font-style:italic"></span>    builderAssistant<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">addMappedStatement</span><span style="color:#000;font-weight:bold">(</span>id<span style="color:#000;font-weight:bold">,</span> sqlSource<span style="color:#000;font-weight:bold">,</span> statementType<span style="color:#000;font-weight:bold">,</span> sqlCommandType<span style="color:#000;font-weight:bold">,</span>
+                                        fetchSize<span style="color:#000;font-weight:bold">,</span> timeout<span style="color:#000;font-weight:bold">,</span> parameterMap<span style="color:#000;font-weight:bold">,</span> parameterTypeClass<span style="color:#000;font-weight:bold">,</span> resultMap<span style="color:#000;font-weight:bold">,</span> resultTypeClass<span style="color:#000;font-weight:bold">,</span>
+                                        resultSetTypeEnum<span style="color:#000;font-weight:bold">,</span> flushCache<span style="color:#000;font-weight:bold">,</span> useCache<span style="color:#000;font-weight:bold">,</span> resultOrdered<span style="color:#000;font-weight:bold">,</span>
+                                        keyGenerator<span style="color:#000;font-weight:bold">,</span> keyProperty<span style="color:#000;font-weight:bold">,</span> keyColumn<span style="color:#000;font-weight:bold">,</span> databaseId<span style="color:#000;font-weight:bold">,</span> langDriver<span style="color:#000;font-weight:bold">,</span> resultSets<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>MapperBuilderAssistant#addMappedStatement 会将 MappedStatement 添加到 Configuration 的 mappedStatements 映射表中。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-11_16-07-10.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-11_16-07-10.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-11_16-07-10.png" />
+        </a>
+    </p>
+<p>比如对于 UserMapper，其 XML 文件内容为</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#999;font-weight:bold;font-style:italic">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34; ?&gt;</span>
+<span style="color:#999;font-weight:bold;font-style:italic">&lt;!DOCTYPE mapper
+</span><span style="color:#999;font-weight:bold;font-style:italic">        PUBLIC &#34;-//mybatis.org//DTD Mapper 3.0//EN&#34;
+</span><span style="color:#999;font-weight:bold;font-style:italic">        &#34;http://mybatis.org/dtd/mybatis-3-mapper.dtd&#34;&gt;</span>
+
+<span style="color:#000080">&lt;mapper</span> <span style="color:#008080">namespace=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.mapper.UserMapper&#34;</span><span style="color:#000080">&gt;</span>
+  <span style="color:#000080">&lt;select</span> <span style="color:#008080">id=</span><span style="color:#d14">&#34;selectUser&#34;</span> <span style="color:#008080">resultType=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.model.User&#34;</span><span style="color:#000080">&gt;</span>
+    select * from user where id = #{id}
+  <span style="color:#000080">&lt;/select&gt;</span>
+
+  <span style="color:#000080">&lt;insert</span> <span style="color:#008080">id=</span><span style="color:#d14">&#34;addUser&#34;</span><span style="color:#000080">&gt;</span>
+    insert into user values (null, #{name}, #{age})
+  <span style="color:#000080">&lt;/insert&gt;</span>
+
+  <span style="color:#000080">&lt;update</span> <span style="color:#008080">id=</span><span style="color:#d14">&#34;updateByIdXml&#34;</span><span style="color:#000080">&gt;</span>
+    update user set name = #{name} where id = #{id}
+  <span style="color:#000080">&lt;/update&gt;</span>
+<span style="color:#000080">&lt;/mapper&gt;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>当处理完 selectUser 方法对应的标签后，得到的 Configuration 对象的 mappedStatement 信息为：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-11_17-14-37.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-11_17-14-37.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-11_17-14-37.png" />
+        </a>
+    </p>
+<p>UserMapper 接口如下，其中定义了一个注解标识 SQL 方法与三个绑定 XML 文件的方法</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">interface</span> <span style="color:#458;font-weight:bold">UserMapper</span> <span style="color:#000;font-weight:bold">{</span>
+   <span style="color:#998;font-style:italic">// @Select(&#34;select * from t_user where id = #{id}&#34;)
+</span><span style="color:#998;font-style:italic"></span>    User <span style="color:#900;font-weight:bold">selectUser</span><span style="color:#000;font-weight:bold">(</span>Integer id<span style="color:#000;font-weight:bold">);</span>
+    
+    <span style="color:#3c5d5d;font-weight:bold">@Update</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;update user set name = #{name} where id = #{id}&#34;</span><span style="color:#000;font-weight:bold">)</span>
+    <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">updateById</span><span style="color:#000;font-weight:bold">(</span>Integer id<span style="color:#000;font-weight:bold">,</span> String name<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">updateByIdXml</span><span style="color:#000;font-weight:bold">(</span><span style="color:#3c5d5d;font-weight:bold">@Param</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;id&#34;</span><span style="color:#000;font-weight:bold">)</span> Integer id<span style="color:#000;font-weight:bold">,</span> <span style="color:#3c5d5d;font-weight:bold">@Param</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;name&#34;</span><span style="color:#000;font-weight:bold">)</span> String name<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">addUser</span><span style="color:#000;font-weight:bold">(</span><span style="color:#3c5d5d;font-weight:bold">@Param</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;name&#34;</span><span style="color:#000;font-weight:bold">)</span> String name<span style="color:#000;font-weight:bold">,</span> <span style="color:#3c5d5d;font-weight:bold">@Param</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;age&#34;</span><span style="color:#000;font-weight:bold">)</span> Integer age<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>ContainerMapper 接口如下，其中定义了一个绑定 XML 文件的方法。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">interface</span> <span style="color:#458;font-weight:bold">ContainerMapper</span> <span style="color:#000;font-weight:bold">{</span>
+    Container <span style="color:#900;font-weight:bold">listContainer</span><span style="color:#000;font-weight:bold">(</span>Integer id<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>当所有的 mapper 的 XML 都解析完的时候，得到的 Configuration 对象的 mappedStatement 信息为：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-11_17-33-23.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-11_17-33-23.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-11_17-33-23.png" />
+        </a>
+    </p>
+<p><strong>为什么一个方法有两个元素，分别为绝对形式与相对形式的，它们分别在哪个时机被使用？</strong></p>
+<p>Configuration 的 mappedStatements  是自定义的 HashMap 的子类 StrictMap，在往其中添加 MappedStatement 时，如果是类似 <code>xxxMapper.xx</code> 形式的方法标签，会获取一个简短的名称，看这个简短方法名是否存在对应的 MappedStatement，如果没有则会为之添加一个键值对，当然原来长的方法名也会添加进去。所以就会看到上面的现象，一个方法名往往对应在 mappedStatements 会有两份。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-15_14-26-14.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_14-26-14.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-15_14-26-14.png" />
+        </a>
+    </p>
+<p><strong>使用注解标识的 SQL 语句是在哪个时机被解析进 Configuration 的？</strong></p>
+<p>见下面的 Mapper 接口注册流程。</p>
+<h4 id="mapper-绑定">mapper 绑定</h4>
+<p>执行完 XMLMapperBuilder#configurationElement 方法，然后进入 bindMapperForNamespace 方法</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-15-21.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_18-15-21.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-15-21.png" />
+        </a>
+    </p>
+<p>XMLMapperBuilder#bindMapperForNamespace 方法如果没有判断到 Configuration 没有 mapper，会调用 Configuration 的 addMapper 方法往其中注册 Mapper 接口信息。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-19-46.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_18-19-46.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-19-46.png" />
+        </a>
+    </p>
+<p>Configuration#addMapper 会调用 MapperRegistry#addMapper 方法，MapperRegistry  是 Configuration 维护的一个成员，按我理解是 “配置信息中的一部分，用于记录 mapper 注册信息”。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-20-46.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_18-20-46.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_18-20-46.png" />
+        </a>
+    </p>
+<p>再看 MapperRegistry#addMapper 方法，入参是 Mapper 接口的 Class 信息，将它丢到其成员 <code>private final Map&lt;Class&lt;?&gt;, MapperProxyFactory&lt;?&gt;&gt; knownMappers = new HashMap&lt;&gt;();</code> 中，key 是 Class 对象引用，value 则是一个 MapperProxyFactory 对象，</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy//Snipaste_2021-11-07_18-23-08.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_18-23-08.png" src="/images/java/mybatis/proxy//Snipaste_2021-11-07_18-23-08.png" />
+        </a>
+    </p>
+<p>MapperProxyFactory 是所谓的代理对象生产工厂，其构造参数接收代理的接口的 Class 信息，然后需要创建代理对象时将调用 newInstance 方法。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-42-32.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_21-42-32.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-42-32.png" />
+        </a>
+    </p>
+<h5 id="注解-sql-的解析">注解 SQL 的解析</h5>
+<p>在 MapperAnnotationBuilder#parseStatement 方法中会处理 Mapper 中定义的每个方法，其中会调用 getAnnotationWrapper 方法判断这个方法上是否加有以下注解。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"> <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?</span> <span style="color:#000;font-weight:bold">extends</span> Annotation<span style="color:#000;font-weight:bold">&gt;&gt;</span> statementAnnotationTypes <span style="color:#000;font-weight:bold">=</span> Stream
+      <span style="color:#000;font-weight:bold">.</span><span style="color:#008080">of</span><span style="color:#000;font-weight:bold">(</span>Select<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> Update<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> Insert<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> Delete<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> SelectProvider<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> UpdateProvider<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span>
+          InsertProvider<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> DeleteProvider<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">)</span>
+      <span style="color:#000;font-weight:bold">.</span><span style="color:#008080">collect</span><span style="color:#000;font-weight:bold">(</span>Collectors<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toSet</span><span style="color:#000;font-weight:bold">());</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>如果有注解的话就根据这个注解类型，解析出相应的 SQL 等信息，然后构建 MappedStatement 并添加到 Configuration 中。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-15_10-14-10.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_10-14-10.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-15_10-14-10.png" />
+        </a>
+    </p>
+<p>再看下 getAnnotationWrapper 方法，入参是上述的 statementAnnotationTypes 注解集合，其中包含 8 个注解类型，</p>
+<ul>
+<li>
+<p>遍历 statementAnnotationTypes，对于注解类型 x，有 <code>.flatMap(x -&gt; Arrays.stream(method.getAnnotationsByType(x)))</code> 一句，<code>method.getAnnotationsByType(x)</code> 用来获取当前处理方法上加了 x 类型的注解，或许这里可以加多个相同类型的注解，所以 getAnnotationsByType 方法返回的一个 Annotation 数组，所以使用 <code>Stream.of</code> 并压平，然后每个 Annotation  对象转化为 AnnotationWrapper 对象，然后以 databaseId 为维度进行分组。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-15_11-12-20.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_11-12-20.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-15_11-12-20.png" />
+        </a>
+    </p>
+<p>由于 Mybatis 支持多数据源，对于每个 SQL 语句都可以指定去哪个数据源执行，所以 Update、Select 等这一堆注解中都可以指定 databaseId 属性，然后 AnnotationWrapper 封装时也会囊括这个字段。</p>
+</li>
+<li>
+<p>获取当前配置的数据源的 databaseId 对应的 AnnotationWrapper。</p>
+</li>
+</ul>
+<p>
+        <a data-fancybox="gallery" href="/assets/proxy/Snipaste_2021-11-15_10-21-56.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_10-21-56.png" src="/assets/proxy/Snipaste_2021-11-15_10-21-56.png" />
+        </a>
+    </p>
+<h3 id="mapper-代理对象的生成">Mapper 代理对象的生成</h3>
+<p>跳进 SqlSession 的 getMapper 方法，</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-48-38.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_21-48-38.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-48-38.png" />
+        </a>
+    </p>
+<p>SqlSession 是根据 Configuration 来创建的，所以它会持有一个 Configuration 对象</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-49-34.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_21-49-34.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-49-34.png" />
+        </a>
+    </p>
+<p>然后由于 Mapper 的配置信息时放在 Configuration  的 MapperRegistry 里面的，所以需要调用 MapperRegistry#getMapper 方法获取 Mapper 代理对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-53-03.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_21-53-03.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-53-03.png" />
+        </a>
+    </p>
+<p>然后通过 Mapper 接口的 Class 信息拿到相应的 MapperProxyFactory 对象，然后调用其 newInstance 方法创建代理对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-55-04.png">
+            <img class="mx-auto" alt="img" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_21-55-04.png" />
+        </a>
+    </p>
+<p>再回看 MapperProxyFactory#newInstance 方法，入参是 SqlSession 对象，根据 SqlSession  创建 MapperProxy 对象，然后通过 JDK 的动态代理技术创建 Mapper 接口的代理对象。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> T <span style="color:#900;font-weight:bold">newInstance</span><span style="color:#000;font-weight:bold">(</span>SqlSession sqlSession<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">final</span> MapperProxy<span style="color:#000;font-weight:bold">&lt;</span>T<span style="color:#000;font-weight:bold">&gt;</span> mapperProxy <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> MapperProxy<span style="color:#000;font-weight:bold">&lt;&gt;(</span>sqlSession<span style="color:#000;font-weight:bold">,</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> methodCache<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> newInstance<span style="color:#000;font-weight:bold">(</span>mapperProxy<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000;font-weight:bold">protected</span> T <span style="color:#900;font-weight:bold">newInstance</span><span style="color:#000;font-weight:bold">(</span>MapperProxy<span style="color:#000;font-weight:bold">&lt;</span>T<span style="color:#000;font-weight:bold">&gt;</span> mapperProxy<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">(</span>T<span style="color:#000;font-weight:bold">)</span> Proxy<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">newProxyInstance</span><span style="color:#000;font-weight:bold">(</span>mapperInterface<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClassLoader</span><span style="color:#000;font-weight:bold">(),</span> <span style="color:#000;font-weight:bold">new</span> Class<span style="color:#000;font-weight:bold">[]</span> <span style="color:#000;font-weight:bold">{</span> mapperInterface <span style="color:#000;font-weight:bold">},</span> mapperProxy<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>通过 debug 信息可见，最后生成的 Mapper 接口实现是 MapperProxy 对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-07_22-17-17.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-07_22-17-17.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-07_22-17-17.png" />
+        </a>
+    </p>
+<h3 id="代理方法的触发">代理方法的触发</h3>
+<p>调用 mapper 接口的 <code>selectUser</code> 方法，将触发代理类 MapperProxy 中实现自  InvocationHandler#invoke 方法。invoker 方法会根据方法信息去缓存中获取对应的方法调用器，如果获取不到就默认创建一个 PlainMethodInvoker 对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/cSnipaste_2021-11-08_22-27-51.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-08_22-27-51.png" src="/images/java/mybatis/proxy/cSnipaste_2021-11-08_22-27-51.png" />
+        </a>
+    </p>
+<p>所以一般地 cachedInvoker 默认会返回一个 PlainMethodInvoker 对象，其中传入构造函数的参数是以 mapper 接口信息、触发的方法信息和 session 信息为参数构建的 MapperMethod 对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-08_22-30-15.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-08_22-30-15.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-08_22-30-15.png" />
+        </a>
+    </p>
+<p>MapperMethod 构造时会初始化其 SqlCommand 和 MethodSignature 成员变量</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">MapperMethod</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> SqlCommand command<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> MethodSignature method<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">MapperMethod</span><span style="color:#000;font-weight:bold">(</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> Method method<span style="color:#000;font-weight:bold">,</span> Configuration config<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">command</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> SqlCommand<span style="color:#000;font-weight:bold">(</span>config<span style="color:#000;font-weight:bold">,</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> method<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">method</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> MethodSignature<span style="color:#000;font-weight:bold">(</span>config<span style="color:#000;font-weight:bold">,</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> method<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>下面是 SqlCommand 的构造函数，其 SqlCommandType 成员会记录对应 SQL 命令的类型，如 UNKNOWN, INSERT, UPDATE, DELETE, SELECT, FLUSH 等。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">SqlCommand</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> String name<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> SqlCommandType type<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">SqlCommand</span><span style="color:#000;font-weight:bold">(</span>Configuration configuration<span style="color:#000;font-weight:bold">,</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> Method method<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">final</span> String methodName <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">final</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> declaringClass <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getDeclaringClass</span><span style="color:#000;font-weight:bold">();</span>
+        MappedStatement ms <span style="color:#000;font-weight:bold">=</span> resolveMappedStatement<span style="color:#000;font-weight:bold">(</span>mapperInterface<span style="color:#000;font-weight:bold">,</span> methodName<span style="color:#000;font-weight:bold">,</span> declaringClass<span style="color:#000;font-weight:bold">,</span>
+                                                    configuration<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ms <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getAnnotation</span><span style="color:#000;font-weight:bold">(</span>Flush<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                name <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+                type <span style="color:#000;font-weight:bold">=</span> SqlCommandType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">FLUSH</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> BindingException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;Invalid bound statement (not found): &#34;</span>
+                                           <span style="color:#000;font-weight:bold">+</span> mapperInterface<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;.&#34;</span> <span style="color:#000;font-weight:bold">+</span> methodName<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#998;font-style:italic">// 记录 MappedStatement 的 id，后续根据 id 获取到 Configuration 中的 MappedStatement
+</span><span style="color:#998;font-style:italic"></span>            name <span style="color:#000;font-weight:bold">=</span> ms<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getId</span><span style="color:#000;font-weight:bold">();</span>
+            type <span style="color:#000;font-weight:bold">=</span> ms<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getSqlCommandType</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>type <span style="color:#000;font-weight:bold">==</span> SqlCommandType<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">UNKNOWN</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> BindingException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;Unknown execution method for: &#34;</span> <span style="color:#000;font-weight:bold">+</span> name<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>MethodSignature 用来维护 Mapper 方法对应的出入参等签名信息。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">MethodSignature</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> returnsMany<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> returnsMap<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> returnsVoid<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> returnsCursor<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">boolean</span> returnsOptional<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> returnType<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> String mapKey<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Integer resultHandlerIndex<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Integer rowBoundsIndex<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> ParamNameResolver paramNameResolver<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">MethodSignature</span><span style="color:#000;font-weight:bold">(</span>Configuration configuration<span style="color:#000;font-weight:bold">,</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> mapperInterface<span style="color:#000;font-weight:bold">,</span> Method method<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Type resolvedReturnType <span style="color:#000;font-weight:bold">=</span> TypeParameterResolver<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">resolveReturnType</span><span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">,</span> mapperInterface<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>resolvedReturnType <span style="color:#000;font-weight:bold">instanceof</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;)</span> resolvedReturnType<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>resolvedReturnType <span style="color:#000;font-weight:bold">instanceof</span> ParameterizedType<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;)</span> <span style="color:#000;font-weight:bold">((</span>ParameterizedType<span style="color:#000;font-weight:bold">)</span> resolvedReturnType<span style="color:#000;font-weight:bold">).</span><span style="color:#008080">getRawType</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span> <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getReturnType</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsVoid</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#458;font-weight:bold">void</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsMany</span> <span style="color:#000;font-weight:bold">=</span> configuration<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectFactory</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">isCollection</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isArray</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsCursor</span> <span style="color:#000;font-weight:bold">=</span> Cursor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsOptional</span> <span style="color:#000;font-weight:bold">=</span> Optional<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnType</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mapKey</span> <span style="color:#000;font-weight:bold">=</span> getMapKey<span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsMap</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mapKey</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">rowBoundsIndex</span> <span style="color:#000;font-weight:bold">=</span> getUniqueParamIndex<span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">,</span> RowBounds<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">resultHandlerIndex</span> <span style="color:#000;font-weight:bold">=</span> getUniqueParamIndex<span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">,</span> ResultHandler<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">paramNameResolver</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> ParamNameResolver<span style="color:#000;font-weight:bold">(</span>configuration<span style="color:#000;font-weight:bold">,</span> method<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>再回到 MapperProxy#invoke 方法的逻辑，获取到 PlainMethodInvoker 对象后，会调用  PlainMethodInvoker#invoke 方法，实际上是 MapperMethod#execute 方法。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-08_22-32-14.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-08_22-32-14.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-08_22-32-14.png" />
+        </a>
+    </p>
+<h3 id="sql-指令执行">SQL 指令执行</h3>
+<p>MapperMethod#execute 方法代码如下，先判断相应方法的 SQL 指令的类型，根据不同的 DML 指令类型执行不同的处理。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> Object <span style="color:#900;font-weight:bold">execute</span><span style="color:#000;font-weight:bold">(</span>SqlSession sqlSession<span style="color:#000;font-weight:bold">,</span> Object<span style="color:#000;font-weight:bold">[]</span> args<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Object result<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">switch</span> <span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getType</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">case</span> INSERT<span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">{</span>
+            Object param <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">convertArgsToSqlCommandParam</span><span style="color:#000;font-weight:bold">(</span>args<span style="color:#000;font-weight:bold">);</span>
+            result <span style="color:#000;font-weight:bold">=</span> rowCountResult<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">insert</span><span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">(),</span> param<span style="color:#000;font-weight:bold">));</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">case</span> UPDATE<span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">{</span>
+            Object param <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">convertArgsToSqlCommandParam</span><span style="color:#000;font-weight:bold">(</span>args<span style="color:#000;font-weight:bold">);</span>
+            result <span style="color:#000;font-weight:bold">=</span> rowCountResult<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">update</span><span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">(),</span> param<span style="color:#000;font-weight:bold">));</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">case</span> DELETE<span style="color:#000;font-weight:bold">:</span> <span style="color:#000;font-weight:bold">{</span>
+            Object param <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">convertArgsToSqlCommandParam</span><span style="color:#000;font-weight:bold">(</span>args<span style="color:#000;font-weight:bold">);</span>
+            result <span style="color:#000;font-weight:bold">=</span> rowCountResult<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">delete</span><span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">(),</span> param<span style="color:#000;font-weight:bold">));</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">case</span> SELECT<span style="color:#000;font-weight:bold">:</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsVoid</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hasResultHandler</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                executeWithResultHandler<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">);</span>
+                result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsMany</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                result <span style="color:#000;font-weight:bold">=</span> executeForMany<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsMap</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                result <span style="color:#000;font-weight:bold">=</span> executeForMap<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsCursor</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                result <span style="color:#000;font-weight:bold">=</span> executeForCursor<span style="color:#000;font-weight:bold">(</span>sqlSession<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                Object param <span style="color:#000;font-weight:bold">=</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">convertArgsToSqlCommandParam</span><span style="color:#000;font-weight:bold">(</span>args<span style="color:#000;font-weight:bold">);</span>
+                result <span style="color:#000;font-weight:bold">=</span> sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">selectOne</span><span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">(),</span> param<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsOptional</span><span style="color:#000;font-weight:bold">()</span>
+                    <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">(</span>result <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">!</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getReturnType</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>result<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClass</span><span style="color:#000;font-weight:bold">())))</span> <span style="color:#000;font-weight:bold">{</span>
+                    result <span style="color:#000;font-weight:bold">=</span> Optional<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">ofNullable</span><span style="color:#000;font-weight:bold">(</span>result<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">case</span> FLUSH<span style="color:#000;font-weight:bold">:</span>
+            result <span style="color:#000;font-weight:bold">=</span> sqlSession<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">flushStatements</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">default</span><span style="color:#000;font-weight:bold">:</span>
+            <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> BindingException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;Unknown execution method for: &#34;</span> <span style="color:#000;font-weight:bold">+</span> command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">());</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>result <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getReturnType</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">isPrimitive</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">!</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">returnsVoid</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> BindingException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;Mapper method &#39;&#34;</span> <span style="color:#000;font-weight:bold">+</span> command<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">()</span>
+                                   <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34; attempted to return null from a method with a primitive return type (&#34;</span> <span style="color:#000;font-weight:bold">+</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getReturnType</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;).&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>以查询为例，SqlSession#selectOne 会调用 DefaultSqlSession#selectList 方法，其中会调用 Configuration#getMappedStatement 方法</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/proxy/Snipaste_2021-11-11_15-57-05.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-11_15-57-05.png" src="/images/java/mybatis/proxy/Snipaste_2021-11-11_15-57-05.png" />
+        </a>
+    </p>
+<p>Configuration#getMappedStatement 是根据 XML 标签中的 id 获取到具体的 statement，前面在 mapper 的 XML 的解析中介绍到 Mybatis 已经将 Mapper 中的信息读取到了 Configuration 里面了，所以这里能够直接拿到具体的配置在 XML 文件中的 SQL 语句，从而调用 JDBC 就能执行相应的指令</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> MappedStatement <span style="color:#900;font-weight:bold">getMappedStatement</span><span style="color:#000;font-weight:bold">(</span>String id<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> validateIncompleteStatements<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>validateIncompleteStatements<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        buildAllStatements<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> mappedStatements<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(</span>id<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2021-08-28-jdk-chm7/">JDK 源码 - ConcurrentHashMap 1.7</a></li>
+        
+        <li><a href="/post/2021-08-22-jdk-countdownlatch/">JDK 源码 - CountDownLatch</a></li>
+        
+        <li><a href="/post/2021-08-19-jdk-reentrantlock/">JDK 源码 - ReentrantLock</a></li>
+        
+        <li><a href="/post/2021-08-10-jdk-aqs/">JDK 源码 - AbstractQueuedSynchronizer</a></li>
+        
+        <li><a href="/post/2021-06-03-hashmap-concurrency/">聊聊多线程环境下的 HashMap</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/mybatis%E6%BA%90%E7%A0%81'>MyBatis源码</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://www.flysnow.org/" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">飞雪无情</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                <div id="secondary">
+    <section class="widget">
+        <form id="search" action='//www.google.com/search' method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="http://golb.cc/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-28-jdk-chm7/" title="JDK 源码 - ConcurrentHashMap 1.7">JDK 源码 - ConcurrentHashMap 1.7</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch">JDK 源码 - CountDownLatch</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/" title="JDK 源码 - ReentrantLock">JDK 源码 - ReentrantLock</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-10-jdk-aqs/" title="JDK 源码 - AbstractQueuedSynchronizer">JDK 源码 - AbstractQueuedSynchronizer</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/" title="聊聊多线程环境下的 HashMap">聊聊多线程环境下的 HashMap</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-05-15-mvcc/" title="浅谈 MySQL 的 MVCC 机制">浅谈 MySQL 的 MVCC 机制</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-04-06-deadlock/" title="记一次工作中数据库死锁问题定位与解决">记一次工作中数据库死锁问题定位与解决</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-06-10-jdk-compiler/" title="写给黑客的 Java 编译器不完全指南">写给黑客的 Java 编译器不完全指南</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
+<ul class="widget-list">
+    
+    <li><a href="http://golb.cc/categories/java/">Java (1)</a></li>
+    
+    <li><a href="http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/">JDK 源码 (5)</a></li>
+    
+    <li><a href="http://golb.cc/categories/mysql/">MySQL (2)</a></li>
+    
+    <li><a href="http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式 (1)</a></li>
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/tags/'>标签</a></h3>
+<div class="tagcloud">
+    
+    <a href="http://golb.cc/tags/apt/">APT</a>
+    
+    <a href="http://golb.cc/tags/ast%E5%88%86%E6%9E%90/">AST分析</a>
+    
+    <a href="http://golb.cc/tags/hashmap/">hashmap</a>
+    
+    <a href="http://golb.cc/tags/java/">Java</a>
+    
+    <a href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">MyBatis源码</a>
+    
+    <a href="http://golb.cc/tags/mysql/">MySQL</a>
+    
+    <a href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+    
+    <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">技术</a>
+    
+    <a href="http://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+    
+    <a href="http://golb.cc/tags/%E6%BA%90%E7%A0%81/">源码</a>
+    
+    <a href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">策略模式</a>
+    
+    <a href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+    
+    <a href="http://golb.cc/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">负载均衡</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="http://golb.cc/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

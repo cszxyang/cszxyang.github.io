@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>并发 | cszxyang</title>
+    <meta property="og:title" content="并发 - cszxyang">
+    <meta property="og:type" content="article">
+        
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="并发">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <link rel="alternate" type="application/rss+xml" href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/index.xml" title="cszxyang" />
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                <div class="col-8" id="main">
+                    
+<div class="res-cons">
+    
+    <h3 class="archive-title">
+        包含标签
+        <span class="keyword">并发</span>
+        的文章
+    </h3>
+    
+
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-28-jdk-chm7/">JDK 源码 - ConcurrentHashMap 1.7</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月22日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-28-jdk-chm7/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/">JDK 源码 - CountDownLatch</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月22日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/">JDK 源码 - ReentrantLock</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月19日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 <code>ReentrantLock</code> 内部是怎么实现的。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-10-jdk-aqs/">JDK 源码 - AbstractQueuedSynchronizer</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月18日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前段时间线上遇到 <code>OOM</code> 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 <code>AbstractQueuedSynchronizer</code> ，没办法只好先把基础的组件搞明白。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-10-jdk-aqs/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/">聊聊多线程环境下的 HashMap</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年6月3日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>很久之前我写了这么一个并发异步的工具方法，传入的 <code>suppliers</code> 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 <code>supplier</code>，再通过多线程异步处理，最后统一收集完结果返回。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/">阅读全文</a></p>
+        </div>
+    </article>
+    
+
+    
+
+
+
+
+
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://www.flysnow.org/" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">飞雪无情</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                <div id="secondary">
+    <section class="widget">
+        <form id="search" action='//www.google.com/search' method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="http://golb.cc/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-28-jdk-chm7/" title="JDK 源码 - ConcurrentHashMap 1.7">JDK 源码 - ConcurrentHashMap 1.7</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch">JDK 源码 - CountDownLatch</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/" title="JDK 源码 - ReentrantLock">JDK 源码 - ReentrantLock</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-10-jdk-aqs/" title="JDK 源码 - AbstractQueuedSynchronizer">JDK 源码 - AbstractQueuedSynchronizer</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/" title="聊聊多线程环境下的 HashMap">聊聊多线程环境下的 HashMap</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-05-15-mvcc/" title="浅谈 MySQL 的 MVCC 机制">浅谈 MySQL 的 MVCC 机制</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-04-06-deadlock/" title="记一次工作中数据库死锁问题定位与解决">记一次工作中数据库死锁问题定位与解决</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-06-10-jdk-compiler/" title="写给黑客的 Java 编译器不完全指南">写给黑客的 Java 编译器不完全指南</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
+<ul class="widget-list">
+    
+    <li><a href="http://golb.cc/categories/java/">Java (1)</a></li>
+    
+    <li><a href="http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/">JDK 源码 (5)</a></li>
+    
+    <li><a href="http://golb.cc/categories/mysql/">MySQL (2)</a></li>
+    
+    <li><a href="http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式 (1)</a></li>
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/tags/'>标签</a></h3>
+<div class="tagcloud">
+    
+    <a href="http://golb.cc/tags/apt/">APT</a>
+    
+    <a href="http://golb.cc/tags/ast%E5%88%86%E6%9E%90/">AST分析</a>
+    
+    <a href="http://golb.cc/tags/hashmap/">hashmap</a>
+    
+    <a href="http://golb.cc/tags/java/">Java</a>
+    
+    <a href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">MyBatis源码</a>
+    
+    <a href="http://golb.cc/tags/mysql/">MySQL</a>
+    
+    <a href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+    
+    <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">技术</a>
+    
+    <a href="http://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+    
+    <a href="http://golb.cc/tags/%E6%BA%90%E7%A0%81/">源码</a>
+    
+    <a href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">策略模式</a>
+    
+    <a href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+    
+    <a href="http://golb.cc/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">负载均衡</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="http://golb.cc/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>cszxyang</title>
+    <link>http://golb.cc/</link>
+    <description>Recent content on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Wed, 10 Jun 2020 00:13:27 +0000</lastBuildDate>
+    
+	<atom:link href="http://golb.cc/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>MyBatis 源码 - Mapper 的动态代理实现过程</title>
+      <link>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</link>
+      <pubDate>Mon, 08 Nov 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</guid>
+      <description>&lt;p&gt;本文通过源码分析了解 MyBatis 的 Mapper 动态代理的实现原理。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>JDK 源码 - ConcurrentHashMap 1.7</title>
+      <link>http://golb.cc/post/2021-08-28-jdk-chm7/</link>
+      <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-08-28-jdk-chm7/</guid>
+      <description>&lt;p&gt;由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>JDK 源码 - CountDownLatch</title>
+      <link>http://golb.cc/post/2021-08-22-jdk-countdownlatch/</link>
+      <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-08-22-jdk-countdownlatch/</guid>
+      <description>&lt;p&gt;前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>JDK 源码 - ReentrantLock</title>
+      <link>http://golb.cc/post/2021-08-19-jdk-reentrantlock/</link>
+      <pubDate>Thu, 19 Aug 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-08-19-jdk-reentrantlock/</guid>
+      <description>&lt;p&gt;前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 &lt;code&gt;ReentrantLock&lt;/code&gt; 内部是怎么实现的。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>JDK 源码 - AbstractQueuedSynchronizer</title>
+      <link>http://golb.cc/post/2021-08-10-jdk-aqs/</link>
+      <pubDate>Wed, 18 Aug 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-08-10-jdk-aqs/</guid>
+      <description>&lt;p&gt;前段时间线上遇到 &lt;code&gt;OOM&lt;/code&gt; 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 &lt;code&gt;AbstractQueuedSynchronizer&lt;/code&gt; ，没办法只好先把基础的组件搞明白。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>聊聊多线程环境下的 HashMap</title>
+      <link>http://golb.cc/post/2021-06-03-hashmap-concurrency/</link>
+      <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-06-03-hashmap-concurrency/</guid>
+      <description>&lt;p&gt;很久之前我写了这么一个并发异步的工具方法，传入的 &lt;code&gt;suppliers&lt;/code&gt; 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 &lt;code&gt;supplier&lt;/code&gt;，再通过多线程异步处理，最后统一收集完结果返回。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>浅谈 MySQL 的 MVCC 机制</title>
+      <link>http://golb.cc/post/2021-05-15-mvcc/</link>
+      <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-05-15-mvcc/</guid>
+      <description>&lt;p&gt;最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>记一次工作中数据库死锁问题定位与解决</title>
+      <link>http://golb.cc/post/2021-04-06-deadlock/</link>
+      <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-04-06-deadlock/</guid>
+      <description>&lt;p&gt;最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>记一次在实际项目中的策略设计模式应用</title>
+      <link>http://golb.cc/post/2020-08-25-strategy-app/</link>
+      <pubDate>Fri, 14 Aug 2020 08:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-08-25-strategy-app/</guid>
+      <description>&lt;p&gt;最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 &lt;code&gt;longtext&lt;/code&gt; 类型的字段 &lt;code&gt;extend_info&lt;/code&gt; 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 &lt;code&gt;extend_info_cipher&lt;/code&gt; 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>写给黑客的 Java 编译器不完全指南</title>
+      <link>http://golb.cc/post/2020-06-10-jdk-compiler/</link>
+      <pubDate>Wed, 10 Jun 2020 08:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-06-10-jdk-compiler/</guid>
+      <description>&lt;p&gt;我的毕业设计做的是一个在线集成开发环境，我给它取了个名字，叫 &lt;code&gt;olycode&lt;/code&gt;，意思大概是&lt;code&gt;online coding&lt;/code&gt;。截止目前，它支持在线运行 Java、Python 和 Lua 代码，该项目现在运行在我的服务器上，可以点 &lt;a href=&#34;http://111.229.131.135:10010/&#34;&gt;传送门 &lt;/a&gt;过去玩玩，完整的工程代码也已经上传到了 Github，感兴趣的朋友可以点 &lt;a href=&#34;https://github.com/cszxyang/olycode&#34;&gt;这里&lt;/a&gt; 去看看。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>关于我</title>
+      <link>http://golb.cc/about/</link>
+      <pubDate>Wed, 10 Jun 2020 00:13:27 +0000</pubDate>
+      
+      <guid>http://golb.cc/about/</guid>
+      <description>人们行走在浪潮边缘，为手中拾起的贝壳欢呼雀跃，无人关心海底正发生的故事。
+ 邮箱：cszxyang@gmail.com | cszxyang@foxmail.com 豆瓣：凌渊  </description>
+    </item>
+    
+    <item>
+      <title>一个易扩展的负载均衡组件实现</title>
+      <link>http://golb.cc/post/2020-05-30-java-spi/</link>
+      <pubDate>Sat, 30 May 2020 09:50:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2020-05-30-java-spi/</guid>
+      <description>&lt;p&gt;最近在看微博的 motan 的源码，其中使用了 SPI 和模板方法设计模式实现负载均衡组件，觉得比较有意思，所以把它单独拿出来研究，不过 motan 的实现封装得有点复杂，所以我想介绍 SPI、模板方法设计模式及一些常见的负载均衡算法相关的知识，然后再基于这些知识自己实现一个类似的易扩展的负载均衡组件。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>归档</title>
+      <link>http://golb.cc/archives/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>http://golb.cc/archives/</guid>
+      <description></description>
+    </item>
+    
+  </channel>
+</rss>
