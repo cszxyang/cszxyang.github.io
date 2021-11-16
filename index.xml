@@ -30,6 +30,15 @@
     </item>
     
     <item>
+      <title>JDK 源码 - ThreadPoolExecutor</title>
+      <link>http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/</link>
+      <pubDate>Mon, 13 Sep 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/</guid>
+      <description>&lt;p&gt;ThreadPoolExecutor 是 Java 的线程池实现，其中封装了对线程的管理（包括创建、调度、销毁等）及任务的分配等逻辑，作为核心并发组件，其中使用到了如阻塞队列、ReentrantLock、原子变量等并发包下的基础工具，由于前面看完了 ReentrantLock 等相关的源码，所以尝试窥探下 ThreadPoolExecutor 的工作过程。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>JDK 源码 - ConcurrentHashMap 1.7</title>
       <link>http://golb.cc/post/2021-08-28-jdk-chm7/</link>
       <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>

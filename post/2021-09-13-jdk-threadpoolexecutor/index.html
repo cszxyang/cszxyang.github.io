@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>JDK 源码 - ThreadPoolExecutor | cszxyang</title>
+    <meta property="og:title" content="JDK 源码 - ThreadPoolExecutor - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-09-13T10:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-09-13T10:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="JDK 源码 - ThreadPoolExecutor">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/categories/" title="分类">分类</a>
+                    
+                    <a  href="http://golb.cc/tags/" title="标签">标签</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                
+                <div class="col-10" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">JDK 源码 - ThreadPoolExecutor</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年9月13日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>ThreadPoolExecutor 是 Java 的线程池实现，其中封装了对线程的管理（包括创建、调度、销毁等）及任务的分配等逻辑，作为核心并发组件，其中使用到了如阻塞队列、ReentrantLock、原子变量等并发包下的基础工具，由于前面看完了 ReentrantLock 等相关的源码，所以尝试窥探下 ThreadPoolExecutor 的工作过程。</p>
+<h3 id="ctl-变量的计算">ctl 变量的计算</h3>
+<p>ThreadPoolExecutor 使用一个原子性的整型变量 ctl 同时存储了线程池的运行状态（runState）和工作线程数（workerCount）。为了将两者压缩到一个 int 里面，需要限制最大的工作线程数为  (2^29)-1。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> AtomicInteger ctl <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> AtomicInteger<span style="color:#000;font-weight:bold">(</span>ctlOf<span style="color:#000;font-weight:bold">(</span>RUNNING<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">));</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> COUNT_BITS <span style="color:#000;font-weight:bold">=</span> Integer<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SIZE</span> <span style="color:#000;font-weight:bold">-</span> 3<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> CAPACITY   <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>1 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">// runState is stored in the high-order bits
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> RUNNING    <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>1 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> SHUTDOWN   <span style="color:#000;font-weight:bold">=</span>  0 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> STOP       <span style="color:#000;font-weight:bold">=</span>  1 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> TIDYING    <span style="color:#000;font-weight:bold">=</span>  2 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> TERMINATED <span style="color:#000;font-weight:bold">=</span>  3 <span style="color:#000;font-weight:bold">&lt;&lt;</span> COUNT_BITS<span style="color:#000;font-weight:bold">;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>所谓的工作线程指的是 “被允许启动，但还没被允许停止的线程”。工作线程数不同于“存活线程数”，当线程工厂被要求创建一个线程但是创建失败时，或者在退出一个线程而它还没实际销毁时，用户可见的线程池大小是不会变化的。下面我们分析上述几个值的计算过程是怎么样的：</p>
+<ul>
+<li>COUNT_BITS：Integer.SIZE 是 32，所以 COUNT_BITS 为 29，其二进制表示为 00000000000000000000000000011101。</li>
+<li>CAPACITY：通过 1 左移 29 位减 1 得到。1 左移 29 位即从第 1 位移到第 30 位，得到 001 00000000000000000000000000000，然后减 1，得到 000 11111111111111111111111111111，这个数值将作为工作线程数，即上述提到的   (2^29)-1。假设</li>
+<li>RUNNING：通过 -1 左移 29 位得到。-1 的二进制表示为 11111111111111111111111111111111，低位补 0 得到 111 00000000000000000000000000000，即通过左移抹掉低 29 位，截取高 3 位记录运行状态，所以下面我们只关注高 3 位。</li>
+<li>SHUTDOWN：通过 0 左移 29 位得到。0 不管怎么移位都是 0，所以高 3 位是 000。</li>
+<li>STOP：通过 1 左移 29 位得到。1 左移 29 位被移到了第 30 位，得到高 3 位为 001，其实到这里可以理解为将低 3 位搬到高 3 位。</li>
+<li>TIDYING：通过 2 左移 29 位得到。低 3 位的 2 的二进制表示 010 被搬到高 3 位。</li>
+<li>TERMINATED：通过 3 左移 29 位得到。低 3 位的 3 的二进制表示 011 被搬到高 3 位。</li>
+</ul>
+<p>通过下面这个方法得到整型数值的高位补 0 对齐后的二进制表示，我们不妨输出上述这些数值的二进制表示来一一验证上面的分析是否正确。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> String <span style="color:#900;font-weight:bold">toBinaryString</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    String s <span style="color:#000;font-weight:bold">=</span> Integer<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toBinaryString</span><span style="color:#000;font-weight:bold">(</span>i<span style="color:#000;font-weight:bold">);</span>
+    StringBuilder builder <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> StringBuilder<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#458;font-weight:bold">int</span> len <span style="color:#000;font-weight:bold">=</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> ii <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> ii <span style="color:#000;font-weight:bold">&lt;</span> 32 <span style="color:#000;font-weight:bold">-</span> len<span style="color:#000;font-weight:bold">;</span> ii<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;0&#34;</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">append</span><span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> builder<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toString</span><span style="color:#000;font-weight:bold">();</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>以下是输出结果，与我们的分析符合。</p>
+<pre><code>COUNT_BITS：		000 00000000000000000000000011101
+CAPACITY：		000 11111111111111111111111111111
+RUNNING：		111 00000000000000000000000000000
+SHUTDOWN：		000 00000000000000000000000000000
+STOP：			001 00000000000000000000000000000
+TIDYING：		010 00000000000000000000000000000
+TERMINATED：		011 00000000000000000000000000000
+</code></pre><p>我觉得这样设计的好处在于，通过一个 int 控制存储两个变量的意义在于，当两个变量需要同时变化时，不需要额外的加锁操作，因为操作系统保证了 int 类型数据操作的原子性，但是 long 和 double 在 32 位的操作系统下操作不是原子性的，可能存在半读半写问题。
+线程池的生命周期涉及下面几个阶段：</p>
+<ul>
+<li>运行中（RUNNING）：接收新任务，同时处理等待队列中的任务。</li>
+<li>关闭（SHUTDOWN）：不接收新任务，但会处理等待队列中剩下的任务。</li>
+<li>停止（STOP）：不接收新任务，也不处理等待队列中剩下的任务，同时还会中断正在执行的任务。</li>
+<li>清扫中（TIDYING）：当所有任务都停止了，工作线程数也归零了，此时会进入 TIDYING 状态，触发 terminated() 钩子函数。</li>
+<li>已终止（TERMINATED）：当 terminated() 方法执行完，线程池进入“已终止”状态。</li>
+</ul>
+<p>上述线程池的状态的转换过程如下图所示：
+
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/threadpool/imagetp-state.png">
+            <img class="mx-auto" alt="image.png" src="/images/java/jdk/concurrent/threadpool/imagetp-state.png" />
+        </a>
+    </p>
+<h3 id="构造函数">构造函数</h3>
+<p>ThreadPoolExecutor 有 5 个带参构造函数，其中 4 个最终都是调用下面这个构造函数创建 ThreadPoolExecutor 对象。比较简单不详述。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">ThreadPoolExecutor</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> corePoolSize<span style="color:#000;font-weight:bold">,</span>
+                          <span style="color:#458;font-weight:bold">int</span> maximumPoolSize<span style="color:#000;font-weight:bold">,</span>
+                          <span style="color:#458;font-weight:bold">long</span> keepAliveTime<span style="color:#000;font-weight:bold">,</span>
+                          TimeUnit unit<span style="color:#000;font-weight:bold">,</span>
+                          BlockingQueue<span style="color:#000;font-weight:bold">&lt;</span>Runnable<span style="color:#000;font-weight:bold">&gt;</span> workQueue<span style="color:#000;font-weight:bold">,</span>
+                          ThreadFactory threadFactory<span style="color:#000;font-weight:bold">,</span>
+                          RejectedExecutionHandler handler<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#998;font-style:italic">// 非法参数校验
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>corePoolSize <span style="color:#000;font-weight:bold">&lt;</span> 0 <span style="color:#000;font-weight:bold">||</span>
+        maximumPoolSize <span style="color:#000;font-weight:bold">&lt;=</span> 0 <span style="color:#000;font-weight:bold">||</span>
+        maximumPoolSize <span style="color:#000;font-weight:bold">&lt;</span> corePoolSize <span style="color:#000;font-weight:bold">||</span>
+        keepAliveTime <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> IllegalArgumentException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workQueue <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> threadFactory <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> handler <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> NullPointerException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#998;font-style:italic">// 赋值
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">corePoolSize</span> <span style="color:#000;font-weight:bold">=</span> corePoolSize<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">maximumPoolSize</span> <span style="color:#000;font-weight:bold">=</span> maximumPoolSize<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">workQueue</span> <span style="color:#000;font-weight:bold">=</span> workQueue<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">keepAliveTime</span> <span style="color:#000;font-weight:bold">=</span> unit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toNanos</span><span style="color:#000;font-weight:bold">(</span>keepAliveTime<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">threadFactory</span> <span style="color:#000;font-weight:bold">=</span> threadFactory<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">handler</span> <span style="color:#000;font-weight:bold">=</span> handler<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>很多开发规范都不建议使用 Executors 工具类的方式创建快熟线程池，因为它们创建出来的线程池可能在执行大量任务时占满内存导致 OOM。一版都是使用手动创建的方式，自己掌控线程池的各个参数，如：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> ThreadPoolExecutor executor <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> ThreadPoolExecutor
+            <span style="color:#000;font-weight:bold">(</span>16<span style="color:#000;font-weight:bold">,</span> 32<span style="color:#000;font-weight:bold">,</span> 0L<span style="color:#000;font-weight:bold">,</span> TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SECONDS</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">new</span> ArrayBlockingQueue<span style="color:#000;font-weight:bold">&lt;&gt;(</span>100<span style="color:#000;font-weight:bold">),</span> <span style="color:#000;font-weight:bold">new</span> ThreadPoolExecutor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">CallerRunsPolicy</span><span style="color:#000;font-weight:bold">());</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>所以理解这几个参数的意义与使用场景比较重要，我们先看涉及的参数：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">72
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">73
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">74
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">75
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">76
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">77
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">78
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">79
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">80
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">81
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">82
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">83
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">84
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">85
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">86
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">87
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">88
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">89
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * If false (default), core threads stay alive even when idle.
+</span><span style="color:#998;font-style:italic"> * If true, core threads use keepAliveTime to time out waiting
+</span><span style="color:#998;font-style:italic"> * for work.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> <span style="color:#458;font-weight:bold">boolean</span> allowCoreThreadTimeOut<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Core pool size is the minimum number of workers to keep alive
+</span><span style="color:#998;font-style:italic"> * (and not allow to time out etc) unless allowCoreThreadTimeOut
+</span><span style="color:#998;font-style:italic"> * is set, in which case the minimum is zero.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> <span style="color:#458;font-weight:bold">int</span> corePoolSize<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Maximum pool size. Note that the actual maximum is internally
+</span><span style="color:#998;font-style:italic"> * bounded by CAPACITY.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> <span style="color:#458;font-weight:bold">int</span> maximumPoolSize<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Tracks largest attained pool size. Accessed only under mainLock.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">int</span> largestPoolSize<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Counter for completed tasks. Updated only on termination of
+</span><span style="color:#998;font-style:italic"> * worker threads. Accessed only under mainLock.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">long</span> completedTaskCount<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * The queue used for holding tasks and handing off to worker
+</span><span style="color:#998;font-style:italic"> * threads.  We do not require that workQueue.poll() returning
+</span><span style="color:#998;font-style:italic"> * null necessarily means that workQueue.isEmpty(), so rely
+</span><span style="color:#998;font-style:italic"> * solely on isEmpty to see if the queue is empty (which we must
+</span><span style="color:#998;font-style:italic"> * do for example when deciding whether to transition from
+</span><span style="color:#998;font-style:italic"> * SHUTDOWN to TIDYING).  This accommodates special-purpose
+</span><span style="color:#998;font-style:italic"> * queues such as DelayQueues for which poll() is allowed to
+</span><span style="color:#998;font-style:italic"> * return null even if it may later return non-null when delays
+</span><span style="color:#998;font-style:italic"> * expire.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> BlockingQueue<span style="color:#000;font-weight:bold">&lt;</span>Runnable<span style="color:#000;font-weight:bold">&gt;</span> workQueue<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Timeout in nanoseconds for idle threads waiting for work.
+</span><span style="color:#998;font-style:italic"> * Threads use this timeout when there are more than corePoolSize
+</span><span style="color:#998;font-style:italic"> * present or if allowCoreThreadTimeOut. Otherwise they wait
+</span><span style="color:#998;font-style:italic"> * forever for new work.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> <span style="color:#458;font-weight:bold">long</span> keepAliveTime<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Factory for new threads. All threads are created using this
+</span><span style="color:#998;font-style:italic"> * factory (via method addWorker).  All callers must be prepared
+</span><span style="color:#998;font-style:italic"> * for addWorker to fail, which may reflect a system or user&#39;s
+</span><span style="color:#998;font-style:italic"> * policy limiting the number of threads.  Even though it is not
+</span><span style="color:#998;font-style:italic"> * treated as an error, failure to create threads may result in
+</span><span style="color:#998;font-style:italic"> * new tasks being rejected or existing ones remaining stuck in
+</span><span style="color:#998;font-style:italic"> * the queue.
+</span><span style="color:#998;font-style:italic"> *
+</span><span style="color:#998;font-style:italic"> * We go further and preserve pool invariants even in the face of
+</span><span style="color:#998;font-style:italic"> * errors such as OutOfMemoryError, that might be thrown while
+</span><span style="color:#998;font-style:italic"> * trying to create threads.  Such errors are rather common due to
+</span><span style="color:#998;font-style:italic"> * the need to allocate a native stack in Thread.start, and users
+</span><span style="color:#998;font-style:italic"> * will want to perform clean pool shutdown to clean up.  There
+</span><span style="color:#998;font-style:italic"> * will likely be enough memory available for the cleanup code to
+</span><span style="color:#998;font-style:italic"> * complete without encountering yet another OutOfMemoryError.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> ThreadFactory threadFactory<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Handler called when saturated or shutdown in execute.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">volatile</span> RejectedExecutionHandler handler<span style="color:#000;font-weight:bold">;</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Lock held on access to workers set and related bookkeeping.
+</span><span style="color:#998;font-style:italic"> * While we could use a concurrent set of some sort, it turns out
+</span><span style="color:#998;font-style:italic"> * to be generally preferable to use a lock. Among the reasons is
+</span><span style="color:#998;font-style:italic"> * that this serializes interruptIdleWorkers, which avoids
+</span><span style="color:#998;font-style:italic"> * unnecessary interrupt storms, especially during shutdown.
+</span><span style="color:#998;font-style:italic"> * Otherwise exiting threads would concurrently interrupt those
+</span><span style="color:#998;font-style:italic"> * that have not yet interrupted. It also simplifies some of the
+</span><span style="color:#998;font-style:italic"> * associated statistics bookkeeping of largestPoolSize etc. We
+</span><span style="color:#998;font-style:italic"> * also hold mainLock on shutdown and shutdownNow, for the sake of
+</span><span style="color:#998;font-style:italic"> * ensuring workers set is stable while separately checking
+</span><span style="color:#998;font-style:italic"> * permission to interrupt and actually interrupting.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> ReentrantLock mainLock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> ReentrantLock<span style="color:#000;font-weight:bold">();</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Set containing all worker threads in pool. Accessed only when
+</span><span style="color:#998;font-style:italic"> * holding mainLock.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> HashSet<span style="color:#000;font-weight:bold">&lt;</span>Worker<span style="color:#000;font-weight:bold">&gt;</span> workers <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashSet<span style="color:#000;font-weight:bold">&lt;</span>Worker<span style="color:#000;font-weight:bold">&gt;();</span>
+
+</code></pre></td></tr></table>
+</div>
+</div><p>以下是结合文档对它们的理解：</p>
+<ul>
+<li>allowCoreThreadTimeOut：默认是 false，如果没有任务提交到线程池，那么核心线程池将会处于空闲状态，这是浪费资源的，为此可以通过这个参数控制核心线程是否超时销毁，如果将这个参数设置为 true，那么核心线程将会在空闲等待 keepAliveTime 后销毁。</li>
+<li>corePoolSize：最少的存活线程数。如果设置 allowCoreThreadTimeOut 为 true，那么一定时间后这个值会变为 0。当阻塞队列未满时，线程池中的线程数将保持在这个数值。</li>
+<li>maximumPoolSize：最大的工作线程数，但实际上这个值不能超过 CAPACITY，即  (2^29)-1。当阻塞队列满时，线程池将在核心线程数的基础上创建新线程来处理任务，直到最大的线程数。</li>
+<li>largestPoolSize：记录线程池中最多有过多少个工作线程。</li>
+<li>completedTaskCount：线程池总共处理了多少个任务，只在工作线程被终止时更新。</li>
+<li>workQueue：用于存储积压任务的阻塞队列，工作线程会从中取出任务进行来执行，注意这里的泛型是 Runnable，对于 Callable 类型的任务，ThreadPoolExecutor 的父类 AbstractExecutorService 会将之转换为 Runnable 的子类 FutureTask，所以这里泛型定义成 Runnable 并无问题。</li>
+<li>keepAliveTime：单位是纳秒，</li>
+<li>threadFactory：ThreadFactory 接口实例，用于创建工作线程。</li>
+<li>handler：所谓的拒绝策略，即当线程池不能接收任务时（队列已满或线程池被 shutdown）的处理器。</li>
+<li>mainLock：ReentrantLock 类型，用于线程池中线程操作的同步控制。</li>
+<li>workers：包装了 Worker 的 HashSet，而 Worker 则是 ThreadPoolExecutor 的一个内部类，它对线程与一些状态信息进行了封装，所以 workers 是存储了所有工作线程的集合。</li>
+</ul>
+<h3 id="worker-类">Worker 类</h3>
+<p>Worker 类是对工作线程的封装，其中包含了对线程的管理细节。</p>
+<ul>
+<li>Worker 类主要为工作线程维护中断控制状态。它是一个 AbstractQueuedSynchronizer 实现，在工作线程执行每个任务前后都需要加锁或解锁，以防止那些试图唤醒一个等待任务的线程的中断信号去打断一个正在执行任务的线程。</li>
+<li>重新实现 AbstractQueuedSynchronizer 而不是使用 ReentrantLock 的原因在于 ReentrantLock  是可重入锁，而作者不希望工作任务在调用线程池控制类方法如 setCorePoolSize 时能够多次换取到锁。</li>
+<li>为了抑制中断信号直到工作线程实际启动，将锁的状态初始化为 -1，期间调用 interruptIfStarted 将不会响应中断。</li>
+<li>Worker 还实现了 Runnable，我觉得这是线程池的设计精髓所在，在 Worker 的构造函数中创建的 Thread 的任务是 this，也就是 Worker 对象，然后 Worker 对象再处理和拉取实际的任务，从而实现了线程的复用，避免因为多任务而去创建多线程。</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">72
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">73
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">74
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">75
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">76
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">77
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">78
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">79
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">80
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">81
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">82
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">83
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">84
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">85
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">86
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">87
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Class Worker mainly maintains interrupt control state for
+</span><span style="color:#998;font-style:italic"> * threads running tasks, along with other minor bookkeeping.
+</span><span style="color:#998;font-style:italic"> * This class opportunistically extends AbstractQueuedSynchronizer
+</span><span style="color:#998;font-style:italic"> * to simplify acquiring and releasing a lock surrounding each task execution.  
+</span><span style="color:#998;font-style:italic"> * This protects against interrupts that are
+</span><span style="color:#998;font-style:italic"> * intended to wake up a worker thread waiting for a task from
+</span><span style="color:#998;font-style:italic"> * instead interrupting a task being run.  
+</span><span style="color:#998;font-style:italic"> *
+</span><span style="color:#998;font-style:italic"> * We implement a simple non-reentrant mutual exclusion lock rather than use
+</span><span style="color:#998;font-style:italic"> * ReentrantLock because we do not want worker tasks to be able to
+</span><span style="color:#998;font-style:italic"> * reacquire the lock when they invoke pool control methods like
+</span><span style="color:#998;font-style:italic"> * setCorePoolSize.  
+</span><span style="color:#998;font-style:italic"> * 
+</span><span style="color:#998;font-style:italic"> * Additionally, to suppress interrupts until the thread actually starts running tasks, 
+</span><span style="color:#998;font-style:italic"> * we initialize lock state to a negative value, and clear it upon start (in runWorker).
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">Worker</span> <span style="color:#000;font-weight:bold">extends</span> AbstractQueuedSynchronizer <span style="color:#000;font-weight:bold">implements</span> Runnable <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic">     * This class will never be serialized, but we provide a
+</span><span style="color:#998;font-style:italic">     * serialVersionUID to suppress a javac warning.
+</span><span style="color:#998;font-style:italic">     */</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">long</span> serialVersionUID <span style="color:#000;font-weight:bold">=</span> 6138294804551838833L<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#998;font-style:italic">/** Thread this worker is running in.  Null if factory fails. */</span>
+    <span style="color:#000;font-weight:bold">final</span> Thread thread<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">/** Initial task to run.  Possibly null. */</span>
+    Runnable firstTask<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">/** Per-thread task counter */</span>
+    <span style="color:#000;font-weight:bold">volatile</span> <span style="color:#458;font-weight:bold">long</span> completedTasks<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic">     * Creates with given first task and thread from ThreadFactory.
+</span><span style="color:#998;font-style:italic">     * @param firstTask the first task (null if none)
+</span><span style="color:#998;font-style:italic">     *
+</span><span style="color:#998;font-style:italic">     * 同步状态 state 设置为 -1，为了在初始化期间不接受中断信号，
+</span><span style="color:#998;font-style:italic">     * 直到 runWorker 方法执行才接受中断信号
+</span><span style="color:#998;font-style:italic">     */</span>
+    Worker<span style="color:#000;font-weight:bold">(</span>Runnable firstTask<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        setState<span style="color:#000;font-weight:bold">(-</span>1<span style="color:#000;font-weight:bold">);</span> <span style="color:#998;font-style:italic">// inhibit interrupts until runWorker
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">firstTask</span> <span style="color:#000;font-weight:bold">=</span> firstTask<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span> <span style="color:#000;font-weight:bold">=</span> getThreadFactory<span style="color:#000;font-weight:bold">().</span><span style="color:#008080">newThread</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#998;font-style:italic">/** Delegates main run loop to outer runWorker  */</span>
+    <span style="color:#998;font-style:italic">// 将调用外部类 ThreadPoolExecutor 的 runWorker 方法
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">run</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        runWorker<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#998;font-style:italic">// Lock methods
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">//
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">// The value 0 represents the unlocked state.
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">// The value 1 represents the locked state.
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">isHeldExclusively</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">return</span> getState<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">!=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryAcquire</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> unused<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndSetState<span style="color:#000;font-weight:bold">(</span>0<span style="color:#000;font-weight:bold">,</span> 1<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+            setExclusiveOwnerThread<span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">());</span>
+            <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">protected</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryRelease</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> unused<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        setExclusiveOwnerThread<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">);</span>
+        setState<span style="color:#000;font-weight:bold">(</span>0<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">lock</span><span style="color:#000;font-weight:bold">()</span>        <span style="color:#000;font-weight:bold">{</span> acquire<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span> <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">tryLock</span><span style="color:#000;font-weight:bold">()</span>  <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> tryAcquire<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span> <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">unlock</span><span style="color:#000;font-weight:bold">()</span>      <span style="color:#000;font-weight:bold">{</span> release<span style="color:#000;font-weight:bold">(</span>1<span style="color:#000;font-weight:bold">);</span> <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">isLocked</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">return</span> isHeldExclusively<span style="color:#000;font-weight:bold">();</span> <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#998;font-style:italic">// 调用此方法进行中断，但在初始化时，state 为 -1，不响应中断信号
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">interruptIfStarted</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+        Thread t<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>getState<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&gt;=</span> 0 <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">(</span>t <span style="color:#000;font-weight:bold">=</span> thread<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">!</span>t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isInterrupted</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupt</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>SecurityException ignore<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="runworker">runWorker</h4>
+<p>runWorker 是工作线程执行任务的主要方法，在其中工作线程会重复地从阻塞队列中获取任务然后执行它们，其详细过程如下所示：</p>
+<ul>
+<li>首先将 AbstractQueuedSynchronizer 中的同步状态从 -1 改成 0 以能够响应中断信号。</li>
+<li>轮询阻塞队列，只要拿到的任务不是 null
+<ul>
+<li>加锁。</li>
+<li>如果线程池正在停止，保证当前工作线程被中断；否则保证当前工作线程不被中断。</li>
+<li>接下来执行任务，并在此前后注册 beforeExecute 和 afterExecute 两个实现点，它们都是 ThreadPoolExecutor 的 protected 修饰的空方法，所以如果想自己定制化 ThreadPoolExecutor，可以覆盖这两个方法实现类似增强。</li>
+<li>最后任务执行完将之置空，completedTasks 加 1，然后释放锁。</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">runWorker</span><span style="color:#000;font-weight:bold">(</span>Worker w<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Thread wt <span style="color:#000;font-weight:bold">=</span> Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">currentThread</span><span style="color:#000;font-weight:bold">();</span>
+    Runnable task <span style="color:#000;font-weight:bold">=</span> w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">firstTask</span><span style="color:#000;font-weight:bold">;</span>
+    w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">firstTask</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+    w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span> <span style="color:#998;font-style:italic">// allow interrupts
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">boolean</span> completedAbruptly <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>task <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">(</span>task <span style="color:#000;font-weight:bold">=</span> getTask<span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#998;font-style:italic">// If pool is stopping, ensure thread is interrupted;
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#998;font-style:italic">// if not, ensure thread is not interrupted.  This
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#998;font-style:italic">// requires a recheck in second case to deal with
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#998;font-style:italic">// shutdownNow race while clearing interrupt
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>runStateAtLeast<span style="color:#000;font-weight:bold">(</span>ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(),</span> STOP<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">||</span>
+                 <span style="color:#000;font-weight:bold">(</span>Thread<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupted</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+                  runStateAtLeast<span style="color:#000;font-weight:bold">(</span>ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(),</span> STOP<span style="color:#000;font-weight:bold">)))</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+                <span style="color:#000;font-weight:bold">!</span>wt<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isInterrupted</span><span style="color:#000;font-weight:bold">())</span>
+                wt<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interrupt</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                beforeExecute<span style="color:#000;font-weight:bold">(</span>wt<span style="color:#000;font-weight:bold">,</span> task<span style="color:#000;font-weight:bold">);</span>
+                Throwable thrown <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                    task<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">run</span><span style="color:#000;font-weight:bold">();</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>RuntimeException x<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    thrown <span style="color:#000;font-weight:bold">=</span> x<span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">throw</span> x<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>Error x<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    thrown <span style="color:#000;font-weight:bold">=</span> x<span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">throw</span> x<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>Throwable x<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    thrown <span style="color:#000;font-weight:bold">=</span> x<span style="color:#000;font-weight:bold">;</span> <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> Error<span style="color:#000;font-weight:bold">(</span>x<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                    afterExecute<span style="color:#000;font-weight:bold">(</span>task<span style="color:#000;font-weight:bold">,</span> thrown<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                task <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+                w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">completedTasks</span><span style="color:#000;font-weight:bold">++;</span>
+                w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        completedAbruptly <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        processWorkerExit<span style="color:#000;font-weight:bold">(</span>w<span style="color:#000;font-weight:bold">,</span> completedAbruptly<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+</code></pre></td></tr></table>
+</div>
+</div><p>对于 runWorker 方法，作者通过很长的一段注释备注了一些需要注意的地方：</p>
+<ol>
+<li>可以从一个初始任务开始不停地获取任务，但这个初始任务不一定是阻塞队列的第一个节点，我们通过 getTask 方法获取任务，如果 getTask 返回 null，将会根据线程池的状态是否改变或者配置参数是否改变来决定要不要退出线程（逻辑在 processWorkerExit 方法）。</li>
+<li>在执行任何任务前，需要先获取当前 Worker 的锁，以避免响应执行过程中线程池的其他中断（我的理解是 <code>Thread.interrupted() &amp;&amp; runStateAtLeast(ctl.get(), STOP))) &amp;&amp; !wt.isInterrupted())</code>这段，即拿到锁后，工作线程只响应 STOP 状态下的中断信号，线程池进入 STOP 前不会设置任何中断标记。</li>
+<li>每个任务执行前都会执行前置处理方法 beforeExecute，这个方法可能会抛出异常，那样的话将导致 completedAbruptly 标记为 true，从而促使线程马上死亡而不会执行到任务。</li>
+<li>假设 beforeExecute 方法正常执行完毕，将执行任务，期间会收集所有的异常，然后送进 afterExecute 方法进行处理。异常收集处分别处理 RuntimeException、ERROR 和 Throwable，因为不能再往外抛出 Throwable，所以将之封装成 Error 再往外抛。这里捕获到任何异常同样会导致线程保守性死亡（因为后面的 try 代码块后都没有 catch 住异常，所以 completedAbruptly 标记为 true）。</li>
+<li>任务执行完毕后，会调用 afterExecute 后置处理方法，这个方法同样也会抛出异常，那样也会导致线程死亡，因为根据 JLS Sec 14.20（大概是 <a href="https://docs.oracle.com/javase/specs/jls/se6/jls3.pdf">Java Language Spercification</a> 第 14.20 节里面提到的异常处理语法），最终这个还会往外抛，跳过了 <code>completedAbruptly = false;</code> 这一句。</li>
+</ol>
+<h4 id="gettask">getTask</h4>
+<p>再看 getTask 方法。进入该方法的线程会阻塞或超时等待任务，这取决于当前配置的设定值，或者如果出现以下的情况它会返回 null，</p>
+<ol>
+<li>当前线程池中存在超过 maximumPoolSize 个工作线程（可能由于调用了 setMaximumPoolSize 方法）。</li>
+<li>线程池被 stop。</li>
+<li>线程池被 shutdown，阻塞队列为空。</li>
+<li>当前工作线程超时等待获取一个任务，然后这个超时的线程需要被终结。</li>
+</ol>
+<p>通过代码看，除了设置 allowCoreThreadTimeOut 参数外，当前线程池的线程数超过核心线程数时，将触发超时等待机制。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Runnable <span style="color:#900;font-weight:bold">getTask</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">boolean</span> timedOut <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// Did the last poll() time out?
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#458;font-weight:bold">int</span> rs <span style="color:#000;font-weight:bold">=</span> runStateOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// Check if queue empty only if necessary.
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">&gt;=</span> SHUTDOWN <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">&gt;=</span> STOP <span style="color:#000;font-weight:bold">||</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isEmpty</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+            decrementWorkerCount<span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#458;font-weight:bold">int</span> wc <span style="color:#000;font-weight:bold">=</span> workerCountOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// Are workers subject to culling?
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#458;font-weight:bold">boolean</span> timed <span style="color:#000;font-weight:bold">=</span> allowCoreThreadTimeOut <span style="color:#000;font-weight:bold">||</span> wc <span style="color:#000;font-weight:bold">&gt;</span> corePoolSize<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>wc <span style="color:#000;font-weight:bold">&gt;</span> maximumPoolSize <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">(</span>timed <span style="color:#000;font-weight:bold">&amp;&amp;</span> timedOut<span style="color:#000;font-weight:bold">))</span>
+            <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">(</span>wc <span style="color:#000;font-weight:bold">&gt;</span> 1 <span style="color:#000;font-weight:bold">||</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isEmpty</span><span style="color:#000;font-weight:bold">()))</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndDecrementWorkerCount<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">))</span>
+                <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">continue</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+            Runnable r <span style="color:#000;font-weight:bold">=</span> timed <span style="color:#000;font-weight:bold">?</span>
+                workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">poll</span><span style="color:#000;font-weight:bold">(</span>keepAliveTime<span style="color:#000;font-weight:bold">,</span> TimeUnit<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">NANOSECONDS</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">:</span>
+            	workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">take</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>r <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>
+                <span style="color:#000;font-weight:bold">return</span> r<span style="color:#000;font-weight:bold">;</span>
+            timedOut <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>InterruptedException retry<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            timedOut <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>主要的过程在一个死循环中，</p>
+<ul>
+<li>如果线程池处于 SHUTDOWN 以上的状态（即 STOP、TYDING、TERMINATED）并且阻塞队列为空，则将工作线程数减 1，然后返回 null，外部的 runWorker 接收到 null 后会在 processWorkerExit 中将该线程销毁。</li>
+<li>如果当前工作线程数大于 maximumPoolSize，或者如果处于超时等待机制，且上一次等待超时，则判断工作线程数是否大于 1 或者阻塞队列是否为空了，是则尝试将工作线程数减 1，将成功就返回 null 否则进入下一轮迭代。</li>
+<li>如果当前线程池的状态没有进入终止状态，或者工作队列大概率有任务可领取，则尝试去阻塞队列获取任务，获取的方式有两种：
+<ul>
+<li>如果处于超时等待机制，则以 keepAliveTime 作为超时等待时间获取任务，这种情况下如果过了 keepAliveTime 还是没任务可领取，则会返回 null，然后当前工作线程将被回收，这样就可以理解 keepAliveTime 的含义了，它是线程最大空闲时间（等待也是空闲的一种），为了避免线程资源浪费，超过这个时间线程就会被回收；</li>
+<li>否则，一直等待，直到领取到任务才返回。</li>
+</ul>
+</li>
+</ul>
+<p>简单而言，上面过程可总结为：</p>
+<ul>
+<li>如果从阻塞队列中获取到了任务，则直接返回该任务。</li>
+<li>如果阻塞队列中无任务，那么阻塞等待直到新的任务到来。</li>
+<li>如果判断到当前 worker 需被回收，那么返回 null。</li>
+</ul>
+<h4 id="processworkerexit">processWorkerExit</h4>
+<p>该方法用于清理濒死线程，除非 completedAbruptly 设置为 true，否则都认为 workerCount 已经减掉了当前濒死线程，不用再减。这个方法会将工作线程从线程池的工作线程集合中移除，它可能会停掉整个线程池，或者用一个新的线程替换掉旧的线程，这个“替换”实际上是先销毁旧线程再新增一个线程，触发替换的前提有：</p>
+<ul>
+<li>如果工作线程是由于执行用户任务遭遇异常而退出</li>
+<li>线程池中只有少于 corePoolSize 个线程在运行。</li>
+<li>阻塞队列非空，但是没有工作线程了。</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">processWorkerExit</span><span style="color:#000;font-weight:bold">(</span>Worker w<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> completedAbruptly<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>completedAbruptly<span style="color:#000;font-weight:bold">)</span> <span style="color:#998;font-style:italic">// If abrupt, then workerCount wasn&#39;t adjusted
+</span><span style="color:#998;font-style:italic"></span>        decrementWorkerCount<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">final</span> ReentrantLock mainLock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mainLock</span><span style="color:#000;font-weight:bold">;</span>
+    mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        completedTaskCount <span style="color:#000;font-weight:bold">+=</span> w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">completedTasks</span><span style="color:#000;font-weight:bold">;</span>
+        workers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">remove</span><span style="color:#000;font-weight:bold">(</span>w<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    tryTerminate<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>runStateLessThan<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">,</span> STOP<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>completedAbruptly<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#458;font-weight:bold">int</span> min <span style="color:#000;font-weight:bold">=</span> allowCoreThreadTimeOut <span style="color:#000;font-weight:bold">?</span> 0 <span style="color:#000;font-weight:bold">:</span> corePoolSize<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>min <span style="color:#000;font-weight:bold">==</span> 0 <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">!</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isEmpty</span><span style="color:#000;font-weight:bold">())</span>
+                min <span style="color:#000;font-weight:bold">=</span> 1<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workerCountOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&gt;=</span> min<span style="color:#000;font-weight:bold">)</span>
+                <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// replacement not needed
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">}</span>
+        addWorker<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>上述方法的主要过程：</p>
+<ul>
+<li>如果 completedAbruptly 为 true，说明是因为执行任务异常而濒死的，那么 workerCount 还没来得及减 1，需要先减 1。</li>
+<li>加锁，做所谓的 bookkeeping 动作，即将濒死线程从工作线程集合中移除，并清算 completedTaskCount，然后解锁。</li>
+<li>调用 tryTerminate，检查当前线程池的状态是不是 SHUTDOWN 或 STOP，是则可能使线程池吃进入 TERMINATED 状态，如果线程池被终止，此处后面的代码不会执行。</li>
+<li>如果运行状态为 RUUNNING，
+<ul>
+<li>如果不是是因为执行任务异常而濒死的，则可能是等待超时需要被回收，先计算当前所需的最小的线程数 min，如果当前工作线程数大于等于 min，说明当前工作线程数满足作业需求，不用再新建线程。</li>
+<li>调用 addWorker 创建新工作线程。</li>
+</ul>
+</li>
+</ul>
+<h4 id="tryterminate">tryTerminate</h4>
+<p>如果满足下面条件之一，线程池将进入 TERMINATED 状态：</p>
+<ol>
+<li>SHUTDOWN 状态下线程数为 0，且阻塞任务队列为空；</li>
+<li>STOP 状态下，线程池线程数为 0。</li>
+</ol>
+<p>如果处于 SHUTDOWN 状态但阻塞任务队列不为空或者处于 STOP 状态下，线程池线程数不为 0，这时是具备进入 TERMINATED 状态的潜力的，这时的处理方式时，打断一个空闲的在等待阻塞队列派任务的工作线程，以保证 shutdown 的信号能够传播。因为打断它后，它将进入 processWorkerExit 方法，然后进入 tryTerminate，然后它又会去中断一个在等待的线程，这个场景十分有趣：就像一个即将被炒鱿鱼的工人拍了拍另一个在睡觉的工人说，兄弟别等了，没活干了，咱们得走了，我先走哈，等下你走之前记得叫醒那个兄弟让他也去办离职手续吧。
+这个方法只能被以下操作调用：</p>
+<ul>
+<li>减少工作线程数</li>
+<li>shutdown 期间从阻塞队列中删除任务</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * Transitions to TERMINATED state if either (SHUTDOWN and pool
+</span><span style="color:#998;font-style:italic"> * and queue empty) or (STOP and pool empty).  If otherwise
+</span><span style="color:#998;font-style:italic"> * eligible to terminate but workerCount is nonzero, interrupts an
+</span><span style="color:#998;font-style:italic"> * idle worker to ensure that shutdown signals propagate. This
+</span><span style="color:#998;font-style:italic"> * method must be called following any action that might make
+</span><span style="color:#998;font-style:italic"> * termination possible -- reducing worker count or removing tasks
+</span><span style="color:#998;font-style:italic"> * from the queue during shutdown. The method is non-private to
+</span><span style="color:#998;font-style:italic"> * allow access from ScheduledThreadPoolExecutor.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">tryTerminate</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#998;font-style:italic">// 如果满足以下任一条件，都不应该进入 TERMINATED 状态
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 1. 线程池为 RUUNNING 状态
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 2. 线程池为 TIDYING、或 TERMINATED，已经终止过了
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 3. SHUTDOWN 且 workQueue 不为空，不接受新任务，但是历史任务还得处理
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>isRunning<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">||</span>
+            runStateAtLeast<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">,</span> TIDYING<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">||</span>
+            <span style="color:#000;font-weight:bold">(</span>runStateOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> SHUTDOWN <span style="color:#000;font-weight:bold">&amp;&amp;</span> <span style="color:#000;font-weight:bold">!</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isEmpty</span><span style="color:#000;font-weight:bold">()))</span>
+            <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#998;font-style:italic">// 上面没 return，说明可以 TERMINATED
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 只有 SHUTDOWN 状态且 workQueue 不为空，或者 STOP 状态能执行到这一步
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 如果 workerCount 不为 0，说明此时线程池还有线程（正在运行任务，正在等待任务）
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 则中断唤醒一个正在等任务的空闲 worker
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workerCountOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#998;font-style:italic">// Eligible to terminate
+</span><span style="color:#998;font-style:italic"></span>            interruptIdleWorkers<span style="color:#000;font-weight:bold">(</span>ONLY_ONE<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+		<span style="color:#998;font-style:italic">// 能够走到这里没 return，说明当前线程池已经没有工作线程了，也没有任务了
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// 可以进入 TIDYING 状态了
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">final</span> ReentrantLock mainLock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mainLock</span><span style="color:#000;font-weight:bold">;</span>
+        mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#998;font-style:italic">// 线程池进入 TIDYING 状态，此时工作线程数变为 0，阻塞队列也是空的
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">compareAndSet</span><span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">,</span> ctlOf<span style="color:#000;font-weight:bold">(</span>TIDYING<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">)))</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                    terminated<span style="color:#000;font-weight:bold">();</span> <span style="color:#998;font-style:italic">// 空实现，等子类覆盖
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                    <span style="color:#998;font-style:italic">// 调用完 terminated() 方法后最后进入 TERMINATED 状态
+</span><span style="color:#998;font-style:italic"></span>                    ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">set</span><span style="color:#000;font-weight:bold">(</span>ctlOf<span style="color:#000;font-weight:bold">(</span>TERMINATED<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">));</span>
+                    <span style="color:#998;font-style:italic">// 外部有线程等待线程池终止后进行操作的话
+</span><span style="color:#998;font-style:italic"></span>                    <span style="color:#998;font-style:italic">// 这时通知它们去干活
+</span><span style="color:#998;font-style:italic"></span>                    termination<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">signalAll</span><span style="color:#000;font-weight:bold">();</span>
+                <span style="color:#000;font-weight:bold">}</span>
+                <span style="color:#998;font-style:italic">// 退出循环，释放锁并返回调用
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+            mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#998;font-style:italic">// else retry on failed CAS
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#998;font-style:italic">// CAS 失败则不会退出循环，继续重试
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="执行任务">执行任务</h3>
+<p>当执行任务时会执行以下方法，但它不是立即执行的，且该任务可能由一个已有的线程执行或新建一个线程去执行。如果任务不能被提交执行，要么是因为线程池已经被 shutdown，要么是因为当前允许的任务容量已经达到最大，该任务将由拒绝策略处理器处理。该方法的执行分为三步：</p>
+<ol>
+<li>如果当前线程池中正在运行的线程数小于 corePoolSize，尝试新启动一个线程，并将当前提交到线程池的任务作为这个新线程执行的第一个任务。addWorker 方法会检查 runState 和 workerCount，如果不能添加新线程会返回 false。</li>
+<li>如果当前线程池处于运行状态且工作线程数大于 corePoolSize，则将任务放入阻塞队列，如果该任务可以被成功放入阻塞队列，那么会重新检查线程池的运行状态，
+<ol>
+<li>如果线程池处于非运行态，那么将该任务从阻塞队列中删除，并交由拒绝策略处理器处理。</li>
+<li>如果线程池处于运行态或者删除任务失败，且当前线程池没有工作线程，那么就新建一个非核心线程。</li>
+</ol>
+</li>
+<li>如果处于运行态但是往阻塞队列已满导致添加任务失败，那么就尝试新加一个非核心线程，并将当前提交到线程池的任务作为这个新线程执行的第一个任务。如果新建工作线程失败，则触发拒绝策略。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">execute</span><span style="color:#000;font-weight:bold">(</span>Runnable command<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>command <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> NullPointerException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#998;font-style:italic">/*
+</span><span style="color:#998;font-style:italic">     * Proceed in 3 steps:
+</span><span style="color:#998;font-style:italic">     *
+</span><span style="color:#998;font-style:italic">     * 1. If fewer than corePoolSize threads are running, try to
+</span><span style="color:#998;font-style:italic">     * start a new thread with the given command as its first
+</span><span style="color:#998;font-style:italic">     * task.  The call to addWorker atomically checks runState and
+</span><span style="color:#998;font-style:italic">     * workerCount, and so prevents false alarms that would add
+</span><span style="color:#998;font-style:italic">     * threads when it shouldn&#39;t, by returning false.
+</span><span style="color:#998;font-style:italic">     *
+</span><span style="color:#998;font-style:italic">     * 2. If a task can be successfully queued, then we still need
+</span><span style="color:#998;font-style:italic">     * to double-check whether we should have added a thread
+</span><span style="color:#998;font-style:italic">     * (because existing ones died since last checking) or that
+</span><span style="color:#998;font-style:italic">     * the pool shut down since entry into this method. So we
+</span><span style="color:#998;font-style:italic">     * recheck state and if necessary roll back the enqueuing if
+</span><span style="color:#998;font-style:italic">     * stopped, or start a new thread if there are none.
+</span><span style="color:#998;font-style:italic">     *
+</span><span style="color:#998;font-style:italic">     * 3. If we cannot queue task, then we try to add a new
+</span><span style="color:#998;font-style:italic">     * thread.  If it fails, we know we are shut down or saturated
+</span><span style="color:#998;font-style:italic">     * and so reject the task.
+</span><span style="color:#998;font-style:italic">     */</span>
+    <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workerCountOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&lt;</span> corePoolSize<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>addWorker<span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">))</span>
+            <span style="color:#000;font-weight:bold">return</span><span style="color:#000;font-weight:bold">;</span>
+        c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>isRunning<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">offer</span><span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">int</span> recheck <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span> isRunning<span style="color:#000;font-weight:bold">(</span>recheck<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> remove<span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">))</span>
+            reject<span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workerCountOf<span style="color:#000;font-weight:bold">(</span>recheck<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> 0<span style="color:#000;font-weight:bold">)</span>
+            addWorker<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>addWorker<span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">))</span>
+        reject<span style="color:#000;font-weight:bold">(</span>command<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="addworker">addWorker</h3>
+<p>基于当前线程池的运行状态以及最大最小线程数限制，检查是否能添加一个新的工作线程，如果可以，则当前的工作线程数会加 1。另外，如果没什么问题的话，线程会被创建然后启动，并将 firstTask 作为第一个任务运行。
+如果该方法返回 false，要么是因为线程池已经 STOP，或即将被 shutdown，要么就是因为当前线程工厂创建线程失败，而线程创建失败，可能是由于线程工厂返回了 null，也可能是 Thread.start 方法中抛出 OutOfMemoryError。对于线程创建失败的情况，会调用 addWorkerFailed 对线程池进行回滚。
+该方法用到了 retry，continue retry 相当于从内层循环 break，break retry 相当于直接跳出两层循环。接下来看这个方法的逻辑：</p>
+<ol>
+<li>两个死循环，
+<ol>
+<li>外部死循环检查线程池的运行状态，如果处于 STOP、TYDING 或 TERMINATED 且 firstTask 为空但等待队列不为空的情况下，直接返回 false，表示新建工作线程失败，因为在这三种状态下，线程池不会接受新任务，甚至不会将阻塞队列中任务消费完，而是将重心放在如何销毁线程上，所以不会反其道而行之。</li>
+<li>然后如果满足以下任一条件，则会根据入参 core 决定是否最大的线程数限制，如果创建的是核心线程，那么最大线程数限制是 corePoolSize，如果创建的不是核心线程，那么最大的线程数限制是 maximumPoolSize，如果超过最大线程数限制，则返回 false，表示创建 Worker 失败；如果没有超过最大线程数限制，则通过 CAS 操作将 ctl 加 1，表示工作线程数加 1，然后跳出双层循环。如果 CAS 失败，说明 ctl 发生了变化，不是预期值，那么继续校验是不是运行状态发生了变化，是的话跳出内层循环，让下一次迭代时在外层循环再次通过校验线程池的状态来决定是否能够创建线程。
+<ol>
+<li>线程池处于运行状态</li>
+<li>线程池处于 SHUTDOWN 状态（线程池虽然不接收新任务，但是阻塞队列里面的任务还要消费，这时允许创建新工作线程）</li>
+<li>线程池处于 STOP、TYDING 或 TERMINATED 状态，但是 firstTask 不为空（线程池虽然不接收新任务，也不处理阻塞队列里面的任务，但是允许创建新工作线程处理已提交但未进入阻塞队列的新任务）</li>
+<li>线程池处于 STOP、TYDING 或 TERMINATED 状态，firstTask 为空，阻塞队列也为空（没看懂）</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>经过了双层循环，说明能够创建新的工作线程，创建新线程涉及的过程有：
+<ol>
+<li>先加锁，因为需要将新创建的线程加进 workers 里面，而 workers 是 HashSet 类型，它是线程不安全的，需要同步控制，另外 largestPoolSize 的清算也需要放在临界区内。</li>
+<li>通过 firstTask 构建 Worker，其中会将 Worker 作为 Runnable 创建线程，并指定其 firstTask。</li>
+<li>接下来 if  说明，主要有两种情况可以创建线程，一种是线程池处于运行状态，另一种是处于 SHUTDOWN 状态，但是 firstTask 也为空，说明阻塞队列可能还没处理完，需要新建线程来处理。如果满足这两种情况则会将工作线程添加到工作线程集合中，并清算 largestPoolSize。</li>
+<li>解锁</li>
+<li>如果工作线程成功添加到工作线程集合中，则启动新创建的工作线程，注意，这个工作线程启动的时候调用的是 Worker 类的 run 方法，也就是线程池的 runWorker 方法。其中会先执行 firstTask，如果 firstTask 为空或者执行完了，则会去获取阻塞队列里面的任务来执行，看到这里估计能明白为什么 Worker 类实现 Runnable 了，实际上就是为了复用线程以执行更多不同的任务。</li>
+<li>如果线程创建或启动失败，那么就调用 addWorkerFailed 进行回滚。</li>
+</ol>
+</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">boolean</span> <span style="color:#900;font-weight:bold">addWorker</span><span style="color:#000;font-weight:bold">(</span>Runnable firstTask<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> core<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    retry<span style="color:#000;font-weight:bold">:</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#458;font-weight:bold">int</span> rs <span style="color:#000;font-weight:bold">=</span> runStateOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// Check if queue empty only if necessary.
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">&gt;=</span> SHUTDOWN <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+            <span style="color:#000;font-weight:bold">!</span> <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">==</span> SHUTDOWN <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+               firstTask <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+               <span style="color:#000;font-weight:bold">!</span> workQueue<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isEmpty</span><span style="color:#000;font-weight:bold">()))</span>
+            <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(;;)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#458;font-weight:bold">int</span> wc <span style="color:#000;font-weight:bold">=</span> workerCountOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>wc <span style="color:#000;font-weight:bold">&gt;=</span> CAPACITY <span style="color:#000;font-weight:bold">||</span>
+                wc <span style="color:#000;font-weight:bold">&gt;=</span> <span style="color:#000;font-weight:bold">(</span>core <span style="color:#000;font-weight:bold">?</span> corePoolSize <span style="color:#000;font-weight:bold">:</span> maximumPoolSize<span style="color:#000;font-weight:bold">))</span>
+                <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>compareAndIncrementWorkerCount<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">))</span>
+                <span style="color:#000;font-weight:bold">break</span> retry<span style="color:#000;font-weight:bold">;</span>
+            c <span style="color:#000;font-weight:bold">=</span> ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">();</span>  <span style="color:#998;font-style:italic">// Re-read ctl
+</span><span style="color:#998;font-style:italic"></span>            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>runStateOf<span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> rs<span style="color:#000;font-weight:bold">)</span>
+                <span style="color:#000;font-weight:bold">continue</span> retry<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#998;font-style:italic">// else CAS failed due to workerCount change; retry inner loop
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#458;font-weight:bold">boolean</span> workerStarted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">boolean</span> workerAdded <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">;</span>
+    Worker w <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        w <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Worker<span style="color:#000;font-weight:bold">(</span>firstTask<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">final</span> Thread t <span style="color:#000;font-weight:bold">=</span> w<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">thread</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">final</span> ReentrantLock mainLock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mainLock</span><span style="color:#000;font-weight:bold">;</span>
+            mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#998;font-style:italic">// Recheck while holding lock.
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#998;font-style:italic">// Back out on ThreadFactory failure or if
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#998;font-style:italic">// shut down before lock acquired.
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#458;font-weight:bold">int</span> rs <span style="color:#000;font-weight:bold">=</span> runStateOf<span style="color:#000;font-weight:bold">(</span>ctl<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">());</span>
+
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">&lt;</span> SHUTDOWN <span style="color:#000;font-weight:bold">||</span>
+                    <span style="color:#000;font-weight:bold">(</span>rs <span style="color:#000;font-weight:bold">==</span> SHUTDOWN <span style="color:#000;font-weight:bold">&amp;&amp;</span> firstTask <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">isAlive</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#998;font-style:italic">// precheck that t is startable
+</span><span style="color:#998;font-style:italic"></span>                        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> IllegalThreadStateException<span style="color:#000;font-weight:bold">();</span>
+                    workers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">add</span><span style="color:#000;font-weight:bold">(</span>w<span style="color:#000;font-weight:bold">);</span>
+                    <span style="color:#458;font-weight:bold">int</span> s <span style="color:#000;font-weight:bold">=</span> workers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">size</span><span style="color:#000;font-weight:bold">();</span>
+                    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>s <span style="color:#000;font-weight:bold">&gt;</span> largestPoolSize<span style="color:#000;font-weight:bold">)</span>
+                        largestPoolSize <span style="color:#000;font-weight:bold">=</span> s<span style="color:#000;font-weight:bold">;</span>
+                    workerAdded <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+                mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>workerAdded<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                t<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">start</span><span style="color:#000;font-weight:bold">();</span>
+                workerStarted <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">true</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span> workerStarted<span style="color:#000;font-weight:bold">)</span>
+            addWorkerFailed<span style="color:#000;font-weight:bold">(</span>w<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> workerStarted<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="addworkerfailed">addWorkerFailed</h4>
+<p>如果线程创建或启动失败，那么就调用 addWorkerFailed 进行回滚，以下过程需要加锁</p>
+<ol>
+<li>如果线程启动异常，因为已经将线程添加到了工作线程集合，所以要将之移除。</li>
+<li>工作线程数减 1，即 ctl 减 1。</li>
+<li>有可能线程池处于不接收新任务并即将清理工作线程的阶段，这时调用 tryTerminate 尝试让线程池进入 TERMINATED 状态。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">addWorkerFailed</span><span style="color:#000;font-weight:bold">(</span>Worker w<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">final</span> ReentrantLock mainLock <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">mainLock</span><span style="color:#000;font-weight:bold">;</span>
+    mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">lock</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>w <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>
+            workers<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">remove</span><span style="color:#000;font-weight:bold">(</span>w<span style="color:#000;font-weight:bold">);</span>
+        decrementWorkerCount<span style="color:#000;font-weight:bold">();</span>
+        tryTerminate<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        mainLock<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unlock</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2021-08-28-jdk-chm7/" style="color: #0969da">JDK 源码 - ConcurrentHashMap 1.7</a></li>
+        
+        <li><a href="/post/2021-08-22-jdk-countdownlatch/" style="color: #0969da">JDK 源码 - CountDownLatch</a></li>
+        
+        <li><a href="/post/2021-08-19-jdk-reentrantlock/" style="color: #0969da">JDK 源码 - ReentrantLock</a></li>
+        
+        <li><a href="/post/2021-08-10-jdk-aqs/" style="color: #0969da">JDK 源码 - AbstractQueuedSynchronizer</a></li>
+        
+        <li><a href="/post/2021-06-03-hashmap-concurrency/" style="color: #0969da">聊聊多线程环境下的 HashMap</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/%E5%B9%B6%E5%8F%91'>并发</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

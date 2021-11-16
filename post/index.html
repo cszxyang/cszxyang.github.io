@@ -130,6 +130,31 @@
     <article class="post">
         <header>
             <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/" title="JDK 源码 - ThreadPoolExecutor" style="color: #4080cc">JDK 源码 - ThreadPoolExecutor</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年9月13日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>ThreadPoolExecutor 是 Java 的线程池实现，其中封装了对线程的管理（包括创建、调度、销毁等）及任务的分配等逻辑，作为核心并发组件，其中使用到了如阻塞队列、ReentrantLock、原子变量等并发包下的基础工具，由于前面看完了 ReentrantLock 等相关的源码，所以尝试窥探下 ThreadPoolExecutor 的工作过程。</p>……sss
+        </div>
+        <p class="readmore"><a href="http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/">阅读全文</a></p>
+    </article>
+    
+    
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
                 <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch" style="color: #4080cc">JDK 源码 - CountDownLatch</a>
             </h1>
         </header>
@@ -298,31 +323,6 @@
             <p>最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。</p>……sss
         </div>
         <p class="readmore"><a href="http://golb.cc/post/2021-04-06-deadlock/">阅读全文</a></p>
-    </article>
-    
-    
-    
-    <article class="post">
-        <header>
-            <h1 class="post-title">
-                <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用" style="color: #4080cc">记一次在实际项目中的策略设计模式应用</a>
-            </h1>
-        </header>
-        <date class="post-meta meta-date">
-            2020年8月14日
-        </date>
-        
-        <div class="post-meta">
-            <span>|</span>
-            
-            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
-            
-        </div>
-        
-        <div class="post-content">
-            <p>最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 <code>longtext</code> 类型的字段 <code>extend_info</code> 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 <code>extend_info_cipher</code> 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：</p>……sss
-        </div>
-        <p class="readmore"><a href="http://golb.cc/post/2020-08-25-strategy-app/">阅读全文</a></p>
     </article>
     
     
