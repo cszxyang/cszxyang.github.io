@@ -82,6 +82,29 @@
     <article class="post">
         <header>
             <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-11-15-mybatis-plugin/">MyBatis 源码 - Plugin 插件实现过程</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年11月15日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>MyBatis 的执行过程中主要涉及四个很重要的接口，分别是 Executor、ParameterHandler、ResultSetHandler 和 StatementHandler，为了方便用户在上述接口执行过程中植入增强逻辑，MyBatis 实现了插件支持，即用户可以定义对上述接口的方法拦截逻辑，MyBatis 将通过动态代理将这里逻辑植入到具体接口方法的执行过程中。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-11-15-mybatis-plugin/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
                 <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/">MyBatis 源码 - Mapper 的动态代理实现过程</a>
             </h1>
         </header>
@@ -89,8 +112,15 @@
             2021年11月8日
         </date>
         
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
         <div class="post-content">
-            <p>本文通过源码分析了解 MyBatis 的 Mapper 动态代理的实现原理。</p>……
+            <p>在使用 Mabatis 时往往需要有成对出现的 <code>.java</code> 后缀格式 Mapper 接口文件及 <code>.xml</code> 后缀格式的 XML 文件，其中 XML 文件放在资源目录，而 Java 文件自然放在运行目录，通过调用 Mapper 接口中定义的方法就能触发到其通过 namespace 关联的 XML 文件中的 SQL 语句，从而实现了业务逻辑与数据库交互的解耦，避免像传统 JDBC 编程那样在 Java 代码中写 SQL 与数据库交互，那么 Mybtis 是怎么将 Mapper 接口方法与 XML 中 SQL 语句进行绑定与触发的呢？下面我们通过测试方法 debug 调试进行进行代码跟踪。</p>……
             <p class="readmore"><a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/">阅读全文</a></p>
         </div>
     </article>
@@ -108,7 +138,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -131,7 +161,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -154,7 +184,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -177,7 +207,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -200,7 +230,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/jdk-%E6%BA%90%E7%A0%81'>JDK 源码</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -223,7 +253,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/mysql'>MySQL</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -246,7 +276,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/mysql'>MySQL</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -269,7 +299,7 @@
         <div class="post-meta meta-category">
             |
             
-            <a href='/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F'>设计模式</a>
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
             
         </div>
         
@@ -279,46 +309,10 @@
         </div>
     </article>
     
-    <article class="post">
-        <header>
-            <h1 class="post-title">
-                <a href="http://golb.cc/post/2020-06-10-jdk-compiler/">写给黑客的 Java 编译器不完全指南</a>
-            </h1>
-        </header>
-        <date class="post-meta meta-date">
-            2020年6月10日
-        </date>
-        
-        <div class="post-content">
-            <p>我的毕业设计做的是一个在线集成开发环境，我给它取了个名字，叫 <code>olycode</code>，意思大概是<code>online coding</code>。截止目前，它支持在线运行 Java、Python 和 Lua 代码，该项目现在运行在我的服务器上，可以点 <a href="http://111.229.131.135:10010/">传送门 </a>过去玩玩，完整的工程代码也已经上传到了 Github，感兴趣的朋友可以点 <a href="https://github.com/cszxyang/olycode">这里</a> 去看看。</p>……
-            <p class="readmore"><a href="http://golb.cc/post/2020-06-10-jdk-compiler/">阅读全文</a></p>
-        </div>
-    </article>
-    
 
     
 
 
-
-<ol class="page-navigator">
-    
-
-    
-    <li  class="current">
-        <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">1</a>
-    </li>
-    
-    <li >
-        <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/page/2/">2</a>
-    </li>
-    
-
-    
-    <li class="next">
-        <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/page/2/">下一页</a>
-    </li>
-    
-</ol>
 
 
 
@@ -335,7 +329,7 @@
             <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
         </div>
         <div class="github-badge">
-            <a href="https://www.flysnow.org/" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">飞雪无情</span></a>
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
         </div>
         <div class="github-badge">
             <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
@@ -383,6 +377,10 @@ if (!doNotTrack) {
 <ul class="widget-list">
     
     <li>
+        <a href="http://golb.cc/post/2021-11-15-mybatis-plugin/" title="MyBatis 源码 - Plugin 插件实现过程">MyBatis 源码 - Plugin 插件实现过程</a>
+    </li>
+    
+    <li>
         <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
     </li>
     
@@ -418,10 +416,6 @@ if (!doNotTrack) {
         <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
     </li>
     
-    <li>
-        <a href="http://golb.cc/post/2020-06-10-jdk-compiler/" title="写给黑客的 Java 编译器不完全指南">写给黑客的 Java 编译器不完全指南</a>
-    </li>
-    
 </ul>
     </section>
 
@@ -431,13 +425,7 @@ if (!doNotTrack) {
         <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
 <ul class="widget-list">
     
-    <li><a href="http://golb.cc/categories/java/">Java (1)</a></li>
-    
-    <li><a href="http://golb.cc/categories/jdk-%E6%BA%90%E7%A0%81/">JDK 源码 (5)</a></li>
-    
-    <li><a href="http://golb.cc/categories/mysql/">MySQL (2)</a></li>
-    
-    <li><a href="http://golb.cc/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式 (1)</a></li>
+    <li><a href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/">技术 (12)</a></li>
     
 </ul>
     </section>

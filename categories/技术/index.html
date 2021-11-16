@@ -9,21 +9,21 @@
     <meta name="referrer" content="no-referrer-when-downgrade">
     
 
-    <title>MyBatis源码 | cszxyang</title>
-    <meta property="og:title" content="MyBatis源码 - cszxyang">
+    <title>技术 | cszxyang</title>
+    <meta property="og:title" content="技术 - cszxyang">
     <meta property="og:type" content="article">
         
         
     <meta name="Keywords" content="">
-    <meta name="description" content="MyBatis源码">
+    <meta name="description" content="技术">
         
     <meta name="author" content="">
-    <meta property="og:url" content="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">
+    <meta property="og:url" content="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/">
     <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
 
     <link rel="stylesheet" href='/css/normalize.css'>
     <link rel="stylesheet" href='/css/style.css'>
-    <link rel="alternate" type="application/rss+xml" href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/index.xml" title="cszxyang" />
+    <link rel="alternate" type="application/rss+xml" href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/index.xml" title="cszxyang" />
     <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 
     
@@ -72,9 +72,9 @@
 <div class="res-cons">
     
     <h3 class="archive-title">
-        包含标签
-        <span class="keyword">MyBatis源码</span>
-        的文章
+        分类
+        <span class="keyword">技术</span>
+        中的文章
     </h3>
     
 
@@ -125,10 +125,214 @@
         </div>
     </article>
     
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-28-jdk-chm7/">JDK 源码 - ConcurrentHashMap 1.7</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月22日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-28-jdk-chm7/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/">JDK 源码 - CountDownLatch</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月22日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/">JDK 源码 - ReentrantLock</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月19日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 <code>ReentrantLock</code> 内部是怎么实现的。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-08-10-jdk-aqs/">JDK 源码 - AbstractQueuedSynchronizer</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月18日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>前段时间线上遇到 <code>OOM</code> 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 <code>AbstractQueuedSynchronizer</code> ，没办法只好先把基础的组件搞明白。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-08-10-jdk-aqs/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/">聊聊多线程环境下的 HashMap</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年6月3日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>很久之前我写了这么一个并发异步的工具方法，传入的 <code>suppliers</code> 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 <code>supplier</code>，再通过多线程异步处理，最后统一收集完结果返回。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-05-15-mvcc/">浅谈 MySQL 的 MVCC 机制</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年5月14日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-05-15-mvcc/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2021-04-06-deadlock/">记一次工作中数据库死锁问题定位与解决</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年4月6日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2021-04-06-deadlock/">阅读全文</a></p>
+        </div>
+    </article>
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">
+                <a href="http://golb.cc/post/2020-08-25-strategy-app/">记一次在实际项目中的策略设计模式应用</a>
+            </h1>
+        </header>
+        <date class="post-meta meta-date">
+            2020年8月14日
+        </date>
+        
+        <div class="post-meta meta-category">
+            |
+            
+            <a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a>
+            
+        </div>
+        
+        <div class="post-content">
+            <p>最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 <code>longtext</code> 类型的字段 <code>extend_info</code> 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 <code>extend_info_cipher</code> 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：</p>……
+            <p class="readmore"><a href="http://golb.cc/post/2020-08-25-strategy-app/">阅读全文</a></p>
+        </div>
+    </article>
+    
 
     
 
 
+
+<ol class="page-navigator">
+    
+
+    
+    <li  class="current">
+        <a href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/">1</a>
+    </li>
+    
+    <li >
+        <a href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/page/2/">2</a>
+    </li>
+    
+
+    
+    <li class="next">
+        <a href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/page/2/">下一页</a>
+    </li>
+    
+</ol>
 
 
 

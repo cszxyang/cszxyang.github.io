@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>MyBatis 源码 - Plugin 插件实现过程 | cszxyang</title>
+    <meta property="og:title" content="MyBatis 源码 - Plugin 插件实现过程 - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-11-15T12:52:51&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-11-15T12:52:51&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="MyBatis 源码 - Plugin 插件实现过程">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://golb.cc/post/2021-11-15-mybatis-plugin/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://golb.cc/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://golb.cc/">首页</a>
+                    
+                    <a  href="http://golb.cc/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://golb.cc/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                <div class="col-8" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">MyBatis 源码 - Plugin 插件实现过程</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年11月15日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>MyBatis 的执行过程中主要涉及四个很重要的接口，分别是 Executor、ParameterHandler、ResultSetHandler 和 StatementHandler，为了方便用户在上述接口执行过程中植入增强逻辑，MyBatis 实现了插件支持，即用户可以定义对上述接口的方法拦截逻辑，MyBatis 将通过动态代理将这里逻辑植入到具体接口方法的执行过程中。</p>
+<p>MyBatis 官方对拦截器的使用介绍：https://mybatis.org/mybatis-3/configuration.html#plugins</p>
+<p>默认地，Mybatis 允许拦截以下方法的调用：</p>
+<ul>
+<li>Executor (update, query, flushStatements, commit, rollback, getTransaction, close, isClosed)</li>
+<li>ParameterHandler (getParameterObject, setParameters)</li>
+<li>ResultSetHandler (handleResultSets, handleOutputParameters)</li>
+<li>StatementHandler (prepare, parameterize, batch, update, query)</li>
+</ul>
+<h2 id="拦截器注册">拦截器注册</h2>
+<p>下面通过实例跟踪源码看拦截器是如何注册到 Configuration 中的，假设有下面这一个拦截器</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#000080">&lt;plugins&gt;</span>
+    <span style="color:#000080">&lt;plugin</span> <span style="color:#008080">interceptor=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.test.interceptor.ExamplePlugin&#34;</span><span style="color:#000080">/&gt;</span>
+<span style="color:#000080">&lt;/plugins&gt;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>代码如下所示：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#3c5d5d;font-weight:bold">@Intercepts</span><span style="color:#000;font-weight:bold">({</span><span style="color:#3c5d5d;font-weight:bold">@Signature</span><span style="color:#000;font-weight:bold">(</span>
+  type<span style="color:#000;font-weight:bold">=</span> Executor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span>
+  method <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#34;update&#34;</span><span style="color:#000;font-weight:bold">,</span>
+  args <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">{</span>MappedStatement<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">,</span> Object<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">})})</span>
+<span style="color:#3c5d5d;font-weight:bold">@Slf4j</span>
+<span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">ExamplePlugin</span> <span style="color:#000;font-weight:bold">implements</span> Interceptor <span style="color:#000;font-weight:bold">{</span>
+  <span style="color:#000;font-weight:bold">private</span> Properties properties <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Properties<span style="color:#000;font-weight:bold">();</span>
+
+  <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+  <span style="color:#000;font-weight:bold">public</span> Object <span style="color:#900;font-weight:bold">intercept</span><span style="color:#000;font-weight:bold">(</span>Invocation invocation<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">throws</span> Throwable <span style="color:#000;font-weight:bold">{</span>
+    String interceptMethod <span style="color:#000;font-weight:bold">=</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getMethod</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">();</span>
+    log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;进入拦截器ExamplePlugin =&gt; interceptMethod: {}&#34;</span><span style="color:#000;font-weight:bold">,</span> interceptMethod<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// 数据合法性校验
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">&lt;</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+      log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">warn</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;ExamplePlugin:参数为空&#34;</span><span style="color:#000;font-weight:bold">);</span>
+      <span style="color:#000;font-weight:bold">return</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">proceed</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    Object arg1 <span style="color:#000;font-weight:bold">=</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">()[</span>0<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!(</span>arg1 <span style="color:#000;font-weight:bold">instanceof</span> MappedStatement<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+      log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">error</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;ExamplePlugin:参数1不是MappedStatement对象&#34;</span><span style="color:#000;font-weight:bold">);</span>
+      <span style="color:#000;font-weight:bold">return</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">proceed</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    MappedStatement ms <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>MappedStatement<span style="color:#000;font-weight:bold">)</span> arg1<span style="color:#000;font-weight:bold">;</span>
+    log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;ms: {}&#34;</span><span style="color:#000;font-weight:bold">,</span> ms<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getSqlSource</span><span style="color:#000;font-weight:bold">());</span>
+    Object param <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">&gt;</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+      param <span style="color:#000;font-weight:bold">=</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">()[</span>1<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;args:{}, param:{}&#34;</span><span style="color:#000;font-weight:bold">,</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getArgs</span><span style="color:#000;font-weight:bold">(),</span> param<span style="color:#000;font-weight:bold">);</span>
+    BoundSql boundSql <span style="color:#000;font-weight:bold">=</span> ms<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getBoundSql</span><span style="color:#000;font-weight:bold">(</span>param<span style="color:#000;font-weight:bold">);</span>
+    log<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">info</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;boundSql:{}&#34;</span><span style="color:#000;font-weight:bold">,</span> boundSql<span style="color:#000;font-weight:bold">);</span>
+
+    Object returnObject <span style="color:#000;font-weight:bold">=</span> invocation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">proceed</span><span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">return</span> returnObject<span style="color:#000;font-weight:bold">;</span>
+  <span style="color:#000;font-weight:bold">}</span>
+
+  <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+  <span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">setProperties</span><span style="color:#000;font-weight:bold">(</span>Properties properties<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">properties</span> <span style="color:#000;font-weight:bold">=</span> properties<span style="color:#000;font-weight:bold">;</span>
+  <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>在解析 XML 文件过程中会解析 <code>&lt;plugin&gt;</code> 节点，具体的调用链是</p>
+<pre><code>org.apache.ibatis.session.SqlSessionFactoryBuilder#build
+	-&gt; org.apache.ibatis.builder.xml.XMLConfigBuilder#parse
+		-&gt; org.apache.ibatis.builder.xml.XMLConfigBuilder#parseConfiguration
+			-&gt; org.apache.ibatis.builder.xml.XMLConfigBuilder#pluginElement	
+</code></pre><p>解析节点获取到拦截器的全限定类名和属性文件后，通过反射创建相应的拦截器对象，然后添加到 Configuration 中。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-22-25.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_16-22-25.png" src="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-22-25.png" />
+        </a>
+    </p>
+<p>Configuration 中维护了一个 InterceptorChain 对象，真正维护拦截器的是这个对象，其中通过链表 interceptors 收集所有的拦截器对象。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-27-44.png">
+            <img class="mx-auto" alt="img" src="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-27-44.png" />
+        </a>
+    </p>
+<h2 id="代理对象的生成">代理对象的生成</h2>
+<p>对于 Executor、ParameterHandler、ResultSetHandler、StatementHandler 的任何实现，在实例化对象时都会触发 InterceptorChain#pluginAll 方法，并将具体的接口实现传递进去。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-44-09.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_16-44-09.png" src="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-44-09.png" />
+        </a>
+    </p>
+<p>我们再回看 InterceptorChain#pluginAll 方法，它会遍历所有注册的拦截器，依次调用拦截器的 plugin 方法。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">// InterceptorChain#pluginAll
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">public</span> Object <span style="color:#900;font-weight:bold">pluginAll</span><span style="color:#000;font-weight:bold">(</span>Object target<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Interceptor interceptor <span style="color:#000;font-weight:bold">:</span> interceptors<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        target <span style="color:#000;font-weight:bold">=</span> interceptor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">plugin</span><span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> target<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">// Interceptor#plugin
+</span><span style="color:#998;font-style:italic"></span><span style="color:#000;font-weight:bold">default</span> Object <span style="color:#900;font-weight:bold">plugin</span><span style="color:#000;font-weight:bold">(</span>Object target<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">return</span> Plugin<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">wrap</span><span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>而 Interceptor#plugin 方法中则调用 Plugin.wrap 方法，我们直接看 Plugin 类，它实现了 JDK 动态代理的 InvocationHandler 接口，在 wrap 方法中</p>
+<ul>
+<li>
+<p>调用 getSignatureMap 方法：获取当前拦截器 Intercepts 注解里面标识的所有拦截的方法，比如，<code>@Intercepts({@Signature( type= Executor.class, method = &quot;update&quot;, args = {MappedStatement.class, Object.class})})</code> 这句对应的返回结果是：<code>&lt;{Class@2337} &quot;interface org.apache.ibatis.executor.Executor&quot; -&gt; {HashSet@2363}  size = 1, Method@Update&gt;</code>，也就是一个键值对，key 是 Executor 接口，val 是其 update 方法。</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-55-31.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-15_16-55-31.png" src="/images/java/mybatis/interceptor/Snipaste_2021-11-15_16-55-31.png" />
+        </a>
+    </p>
+</li>
+<li>
+<p>Plugin#wrap 方法的入参 target 是 Executor、ParameterHandler、ResultSetHandler、StatementHandler 的任何实现，所以会获取到具体的接口定义，然后再去前面的 signatureMap 中找当前是拦截器是否对当前接口方法做拦截。</p>
+<ul>
+<li>没有的话，返回 target，也就是原对象本身，不做任何额外处理。</li>
+<li>否则，如果当前拦截器上对当前 target 有做拦截，那么将通过动态代理，为 target 生成一个 Plugin 代理对象并返回。</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">class</span> <span style="color:#458;font-weight:bold">Plugin</span> <span style="color:#000;font-weight:bold">implements</span> InvocationHandler <span style="color:#000;font-weight:bold">{</span>
+
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Object target<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Interceptor interceptor<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">final</span> Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> signatureMap<span style="color:#000;font-weight:bold">;</span>
+
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#900;font-weight:bold">Plugin</span><span style="color:#000;font-weight:bold">(</span>Object target<span style="color:#000;font-weight:bold">,</span> Interceptor interceptor<span style="color:#000;font-weight:bold">,</span> Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> signatureMap<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">target</span> <span style="color:#000;font-weight:bold">=</span> target<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">interceptor</span> <span style="color:#000;font-weight:bold">=</span> interceptor<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">signatureMap</span> <span style="color:#000;font-weight:bold">=</span> signatureMap<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">public</span> <span style="color:#000;font-weight:bold">static</span> Object <span style="color:#900;font-weight:bold">wrap</span><span style="color:#000;font-weight:bold">(</span>Object target<span style="color:#000;font-weight:bold">,</span> Interceptor interceptor<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> signatureMap <span style="color:#000;font-weight:bold">=</span> getSignatureMap<span style="color:#000;font-weight:bold">(</span>interceptor<span style="color:#000;font-weight:bold">);</span>
+        Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> type <span style="color:#000;font-weight:bold">=</span> target<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClass</span><span style="color:#000;font-weight:bold">();</span>
+        Class<span style="color:#000;font-weight:bold">&lt;?&gt;[]</span> interfaces <span style="color:#000;font-weight:bold">=</span> getAllInterfaces<span style="color:#000;font-weight:bold">(</span>type<span style="color:#000;font-weight:bold">,</span> signatureMap<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>interfaces<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">return</span> Proxy<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">newProxyInstance</span><span style="color:#000;font-weight:bold">(</span>
+                type<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClassLoader</span><span style="color:#000;font-weight:bold">(),</span>
+                interfaces<span style="color:#000;font-weight:bold">,</span>
+                <span style="color:#000;font-weight:bold">new</span> Plugin<span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">,</span> interceptor<span style="color:#000;font-weight:bold">,</span> signatureMap<span style="color:#000;font-weight:bold">));</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">return</span> target<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#3c5d5d;font-weight:bold">@Override</span>
+    <span style="color:#000;font-weight:bold">public</span> Object <span style="color:#900;font-weight:bold">invoke</span><span style="color:#000;font-weight:bold">(</span>Object proxy<span style="color:#000;font-weight:bold">,</span> Method method<span style="color:#000;font-weight:bold">,</span> Object<span style="color:#000;font-weight:bold">[]</span> args<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">throws</span> Throwable <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+            Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;</span> methods <span style="color:#000;font-weight:bold">=</span> signatureMap<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">get</span><span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getDeclaringClass</span><span style="color:#000;font-weight:bold">());</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>methods <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span> methods<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">contains</span><span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">return</span> interceptor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">intercept</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Invocation<span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">,</span> method<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">));</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">return</span> method<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">invoke</span><span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">,</span> args<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>Exception e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">throw</span> ExceptionUtil<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">unwrapThrowable</span><span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> <span style="color:#900;font-weight:bold">getSignatureMap</span><span style="color:#000;font-weight:bold">(</span>Interceptor interceptor<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Intercepts interceptsAnnotation <span style="color:#000;font-weight:bold">=</span> interceptor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClass</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getAnnotation</span><span style="color:#000;font-weight:bold">(</span>Intercepts<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">class</span><span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// issue #251
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>interceptsAnnotation <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> PluginException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;No @Intercepts annotation was found in interceptor &#34;</span> <span style="color:#000;font-weight:bold">+</span> interceptor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getClass</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getName</span><span style="color:#000;font-weight:bold">());</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        Signature<span style="color:#000;font-weight:bold">[]</span> sigs <span style="color:#000;font-weight:bold">=</span> interceptsAnnotation<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span><span style="color:#000;font-weight:bold">();</span>
+        Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> signatureMap <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashMap<span style="color:#000;font-weight:bold">&lt;&gt;();</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Signature sig <span style="color:#000;font-weight:bold">:</span> sigs<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;</span> methods <span style="color:#000;font-weight:bold">=</span> signatureMap<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">computeIfAbsent</span><span style="color:#000;font-weight:bold">(</span>sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">type</span><span style="color:#000;font-weight:bold">(),</span> k <span style="color:#000;font-weight:bold">-&gt;</span> <span style="color:#000;font-weight:bold">new</span> HashSet<span style="color:#000;font-weight:bold">&lt;&gt;());</span>
+            <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+                Method method <span style="color:#000;font-weight:bold">=</span> sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">type</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">getMethod</span><span style="color:#000;font-weight:bold">(</span>sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">method</span><span style="color:#000;font-weight:bold">(),</span> sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">args</span><span style="color:#000;font-weight:bold">());</span>
+                methods<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">add</span><span style="color:#000;font-weight:bold">(</span>method<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">catch</span> <span style="color:#000;font-weight:bold">(</span>NoSuchMethodException e<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> PluginException<span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;Could not find method on &#34;</span> <span style="color:#000;font-weight:bold">+</span> sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">type</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34; named &#34;</span> <span style="color:#000;font-weight:bold">+</span> sig<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">method</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">+</span> <span style="color:#d14">&#34;. Cause: &#34;</span> <span style="color:#000;font-weight:bold">+</span> e<span style="color:#000;font-weight:bold">,</span> e<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">return</span> signatureMap<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;[]</span> getAllInterfaces<span style="color:#000;font-weight:bold">(</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> type<span style="color:#000;font-weight:bold">,</span> Map<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;,</span> Set<span style="color:#000;font-weight:bold">&lt;</span>Method<span style="color:#000;font-weight:bold">&gt;&gt;</span> signatureMap<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Set<span style="color:#000;font-weight:bold">&lt;</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;&gt;</span> interfaces <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashSet<span style="color:#000;font-weight:bold">&lt;&gt;();</span>
+        <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>type <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Class<span style="color:#000;font-weight:bold">&lt;?&gt;</span> c <span style="color:#000;font-weight:bold">:</span> type<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getInterfaces</span><span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>signatureMap<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">containsKey</span><span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">{</span>
+                    interfaces<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">add</span><span style="color:#000;font-weight:bold">(</span>c<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            type <span style="color:#000;font-weight:bold">=</span> type<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getSuperclass</span><span style="color:#000;font-weight:bold">();</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">return</span> interfaces<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">toArray</span><span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">new</span> Class<span style="color:#000;font-weight:bold">&lt;?&gt;[</span>0<span style="color:#000;font-weight:bold">]);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>如果一个类实现了目标的接口，那么调用完 Plugin#wrap 将会返回一个代理对象到 InterceptorChain#pluginAll 方法，再回看 InterceptorChain#pluginAll，其中藏了很多玄机。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> Object <span style="color:#900;font-weight:bold">pluginAll</span><span style="color:#000;font-weight:bold">(</span>Object target<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>Interceptor interceptor <span style="color:#000;font-weight:bold">:</span> interceptors<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        target <span style="color:#000;font-weight:bold">=</span> interceptor<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">plugin</span><span style="color:#000;font-weight:bold">(</span>target<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> target<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>假如我们定义了 3 个都是针对 Executor 的插件，那么上面代码将遍历这三个插件，分别创建三个代理对象，注意 target 一开始是 Executor 的实现的对象，后面创建完第一个代理对象后指向这个代理对象并传递进 interceptor.plugin 创建第二个代理对象，即第二、第三个的代理对象分别是基于第一个、第二个代理对象创建的代理对象，即 “代理的代理”，通过这种嵌套实现一条代理链，最后返回的 target 是针对 ExamplePlugin2 的代理对象，而 target.invoke 执行时会调用 Interceptor#intercept 方法，而  Interceptor#intercept 方法中会回调上一个代理对象的 invoke 方法，以此类推。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-xml" data-lang="xml"><span style="color:#000080">&lt;plugins&gt;</span>
+    <span style="color:#000080">&lt;plugin</span> <span style="color:#008080">interceptor=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.test.interceptor.ExamplePlugin&#34;</span><span style="color:#000080">/&gt;</span>
+    <span style="color:#000080">&lt;plugin</span> <span style="color:#008080">interceptor=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.test.interceptor.ExamplePlugin1&#34;</span><span style="color:#000080">/&gt;</span>
+    <span style="color:#000080">&lt;plugin</span> <span style="color:#008080">interceptor=</span><span style="color:#d14">&#34;com.github.cszxyang.ibatis.test.interceptor.ExamplePlugin2&#34;</span><span style="color:#000080">/&gt;</span>
+<span style="color:#000080">&lt;/plugins&gt;</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="拦截器的触发">拦截器的触发</h2>
+<p>以一个被代理了的 Executor 对象为例，假设其具体实例是 CachingExecutor@485，被三个拦截器 ExamplePlugin、ExamplePlugin 和 ExamplePlugin2 拦截 update 方法，其代理链如下图所示，即 InterceptorChain#pluginAll 方法会依次创建三个代理对象 CachingExecutor@522、CachingExecutor@524 和 CachingExecutor@528。</p>
+<ul>
+<li>
+<p>由于 CachingExecutor@485 已经被代理了，newExecutor 时最终得到的是代理对象  CachingExecutor@528，调用 CachingExecutor@528 的 update 方法时将会调用其绑定的调用处理器的 Plugin#invoke 方法，其中调用相应拦截器 ExamplePlugin2 的 intercepte 方法，然后调用 <code>invocation.proceed()</code>，其中调用 <code>method.invoke(this.target, this.args)</code>，这里的 target 是当前代理对象绑定的下一个代理对象，即 CachingExecutor@524。</p>
+</li>
+<li>
+<p>接下来试图调用 CachingExecutor@524 的 update 方法，将会调用其绑定的调用处理器的 Plugin#invoke 方法，其中调用相应拦截器 ExamplePlugin1 的 intercepte 方法，然后调用 <code>invocation.proceed()</code>，其中调用 <code>method.invoke(this.target, this.args)</code>，这里的 target 是当前代理对象绑定的下一个代理对象，即 CachingExecutor@522。</p>
+</li>
+<li>
+<p>接下来试图调用 CachingExecutor@522 的 update 方法，将会调用其绑定的调用处理器的 Plugin#invoke 方法，其中调用相应拦截器 ExamplePlugin 的 intercepte 方法，然后调用 <code>invocation.proceed()</code>，其中调用 <code>method.invoke(this.target, this.args)</code>，这里的 target 是当前代理对象绑定的下一个代理对象，即 CachingExecutor@485。</p>
+</li>
+<li>
+<p>接下来试图调用 CachingExecutor@485 的 update 方法，由于 CachingExecutor@485 不是代理对象，所以它会执行相应的数据库交互操作。</p>
+</li>
+</ul>
+<p>
+        <a data-fancybox="gallery" href="/images/java/mybatis/interceptor/Snipaste_2021-11-16_16-37-13.png">
+            <img class="mx-auto" alt="Snipaste_2021-11-16_16-37-13.png" src="/images/java/mybatis/interceptor/Snipaste_2021-11-16_16-37-13.png" />
+        </a>
+    </p>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2021-11-08-mybatis-mapper-proxy/">MyBatis 源码 - Mapper 的动态代理实现过程</a></li>
+        
+        <li><a href="/post/2021-08-28-jdk-chm7/">JDK 源码 - ConcurrentHashMap 1.7</a></li>
+        
+        <li><a href="/post/2021-08-22-jdk-countdownlatch/">JDK 源码 - CountDownLatch</a></li>
+        
+        <li><a href="/post/2021-08-19-jdk-reentrantlock/">JDK 源码 - ReentrantLock</a></li>
+        
+        <li><a href="/post/2021-08-10-jdk-aqs/">JDK 源码 - AbstractQueuedSynchronizer</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/mybatis%E6%BA%90%E7%A0%81'>MyBatis源码</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                <div id="secondary">
+    <section class="widget">
+        <form id="search" action='//www.google.com/search' method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="http://golb.cc/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-15-mybatis-plugin/" title="MyBatis 源码 - Plugin 插件实现过程">MyBatis 源码 - Plugin 插件实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/" title="MyBatis 源码 - Mapper 的动态代理实现过程">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-28-jdk-chm7/" title="JDK 源码 - ConcurrentHashMap 1.7">JDK 源码 - ConcurrentHashMap 1.7</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-22-jdk-countdownlatch/" title="JDK 源码 - CountDownLatch">JDK 源码 - CountDownLatch</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-19-jdk-reentrantlock/" title="JDK 源码 - ReentrantLock">JDK 源码 - ReentrantLock</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-08-10-jdk-aqs/" title="JDK 源码 - AbstractQueuedSynchronizer">JDK 源码 - AbstractQueuedSynchronizer</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-06-03-hashmap-concurrency/" title="聊聊多线程环境下的 HashMap">聊聊多线程环境下的 HashMap</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-05-15-mvcc/" title="浅谈 MySQL 的 MVCC 机制">浅谈 MySQL 的 MVCC 机制</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2021-04-06-deadlock/" title="记一次工作中数据库死锁问题定位与解决">记一次工作中数据库死锁问题定位与解决</a>
+    </li>
+    
+    <li>
+        <a href="http://golb.cc/post/2020-08-25-strategy-app/" title="记一次在实际项目中的策略设计模式应用">记一次在实际项目中的策略设计模式应用</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/categories/'>分类</a></h3>
+<ul class="widget-list">
+    
+    <li><a href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/">技术 (12)</a></li>
+    
+</ul>
+    </section>
+
+    <section class="widget">
+        <h3 class="widget-title"><a href='/tags/'>标签</a></h3>
+<div class="tagcloud">
+    
+    <a href="http://golb.cc/tags/apt/">APT</a>
+    
+    <a href="http://golb.cc/tags/ast%E5%88%86%E6%9E%90/">AST分析</a>
+    
+    <a href="http://golb.cc/tags/hashmap/">hashmap</a>
+    
+    <a href="http://golb.cc/tags/java/">Java</a>
+    
+    <a href="http://golb.cc/tags/mybatis%E6%BA%90%E7%A0%81/">MyBatis源码</a>
+    
+    <a href="http://golb.cc/tags/mysql/">MySQL</a>
+    
+    <a href="http://golb.cc/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+    
+    <a href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/">技术</a>
+    
+    <a href="http://golb.cc/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a>
+    
+    <a href="http://golb.cc/tags/%E6%BA%90%E7%A0%81/">源码</a>
+    
+    <a href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/">策略模式</a>
+    
+    <a href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="http://golb.cc/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+    
+    <a href="http://golb.cc/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">负载均衡</a>
+    
+</div>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">其它</h3>
+        <ul class="widget-list">
+            <li><a href="http://golb.cc/index.xml">文章 RSS</a></li>
+        </ul>
+    </section>
+</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

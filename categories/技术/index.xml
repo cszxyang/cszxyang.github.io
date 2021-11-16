@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Java on cszxyang</title>
-    <link>http://golb.cc/tags/java/</link>
-    <description>Recent content in Java on cszxyang</description>
+    <title>技术 on cszxyang</title>
+    <link>http://golb.cc/categories/%E6%8A%80%E6%9C%AF/</link>
+    <description>Recent content in 技术 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
     <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate>
     
-	<atom:link href="http://golb.cc/tags/java/index.xml" rel="self" type="application/rss+xml" />
+	<atom:link href="http://golb.cc/categories/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
@@ -72,6 +72,24 @@
       
       <guid>http://golb.cc/post/2021-06-03-hashmap-concurrency/</guid>
       <description>&lt;p&gt;很久之前我写了这么一个并发异步的工具方法，传入的 &lt;code&gt;suppliers&lt;/code&gt; 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 &lt;code&gt;supplier&lt;/code&gt;，再通过多线程异步处理，最后统一收集完结果返回。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>浅谈 MySQL 的 MVCC 机制</title>
+      <link>http://golb.cc/post/2021-05-15-mvcc/</link>
+      <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-05-15-mvcc/</guid>
+      <description>&lt;p&gt;最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>记一次工作中数据库死锁问题定位与解决</title>
+      <link>http://golb.cc/post/2021-04-06-deadlock/</link>
+      <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
+      
+      <guid>http://golb.cc/post/2021-04-06-deadlock/</guid>
+      <description>&lt;p&gt;最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。&lt;/p&gt;</description>
     </item>
     
     <item>

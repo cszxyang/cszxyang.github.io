@@ -6,10 +6,19 @@
     <description>Recent content in Posts on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 08 Nov 2021 10:54:24 +0200</lastBuildDate>
+    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate>
     
 	<atom:link href="http://golb.cc/post/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>MyBatis 源码 - Plugin 插件实现过程</title>
+      <link>http://golb.cc/post/2021-11-15-mybatis-plugin/</link>
+      <pubDate>Mon, 15 Nov 2021 12:52:51 +0800</pubDate>
+      
+      <guid>http://golb.cc/post/2021-11-15-mybatis-plugin/</guid>
+      <description>&lt;p&gt;MyBatis 的执行过程中主要涉及四个很重要的接口，分别是 Executor、ParameterHandler、ResultSetHandler 和 StatementHandler，为了方便用户在上述接口执行过程中植入增强逻辑，MyBatis 实现了插件支持，即用户可以定义对上述接口的方法拦截逻辑，MyBatis 将通过动态代理将这里逻辑植入到具体接口方法的执行过程中。&lt;/p&gt;</description>
+    </item>
     
     <item>
       <title>MyBatis 源码 - Mapper 的动态代理实现过程</title>
@@ -17,7 +26,7 @@
       <pubDate>Mon, 08 Nov 2021 10:54:24 +0200</pubDate>
       
       <guid>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</guid>
-      <description>&lt;p&gt;本文通过源码分析了解 MyBatis 的 Mapper 动态代理的实现原理。&lt;/p&gt;</description>
+      <description>&lt;p&gt;在使用 Mabatis 时往往需要有成对出现的 &lt;code&gt;.java&lt;/code&gt; 后缀格式 Mapper 接口文件及 &lt;code&gt;.xml&lt;/code&gt; 后缀格式的 XML 文件，其中 XML 文件放在资源目录，而 Java 文件自然放在运行目录，通过调用 Mapper 接口中定义的方法就能触发到其通过 namespace 关联的 XML 文件中的 SQL 语句，从而实现了业务逻辑与数据库交互的解耦，避免像传统 JDBC 编程那样在 Java 代码中写 SQL 与数据库交互，那么 Mybtis 是怎么将 Mapper 接口方法与 XML 中 SQL 语句进行绑定与触发的呢？下面我们通过测试方法 debug 调试进行进行代码跟踪。&lt;/p&gt;</description>
     </item>
     
     <item>
