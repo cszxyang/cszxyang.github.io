@@ -133,7 +133,7 @@ MVCC 主要依赖：</p>
 <p>InnoDB 在实现 MVCC 时用到的一致性读视图，用于支持 RC 和 RR 隔离级别的实现，Read View 是以逆序排列的，其代码位于 storage/innobase/include/read0read.h，属性包括：</p>
 <ul>
 <li>low_limit_id：事务 ID 大于等于该值的事务不能看到该视图，高水位</li>
-<li>up_limit_id：事务 ID 大于等于该值的事务能看到该视图，低水位</li>
+<li>up_limit_id：事务 ID 小于等于该值的事务能看到该视图，低水位</li>
 <li>n_trx_ids：当前活跃事务（即未提交的事务）的数量</li>
 <li>trx_ids：以逆序排列的当前获取活跃事务 ID 的数组（其up_limit_id &lt; tx_id &lt; low_limit_id）</li>
 <li>creator_trx_id：创建当前视图的事务 ID</li>
@@ -351,6 +351,28 @@ MVCC 主要依赖：</p>
 <li><a href="http://www.imooc.com/article/17290">掘金 - MySQL数据库事务各隔离级别加锁情况</a></li>
 <li><a href="https://my.oschina.net/alchemystar/blog/1927425">MySQL多版本并发控制机制(MVCC)-源码浅析</a></li>
 </ol>
+<h4 id="2021-11-21-更新总结">2021-11-21 更新总结</h4>
+<ol>
+<li>生成 readView：遍历全局事务链，剔除已提交及当前事务 ID，得到
+<ol>
+<li>low_limit_id：事务 ID 大于等于该值的事务不能看到该视图，高水位</li>
+<li>up_limit_id：事务 ID 小于等于该值的事务能看到该视图，低水位</li>
+<li>trx_ids：以逆序排列的当前获取活跃事务 ID 的数组（其 up_limit_id &lt; trx_id &lt; low_limit_id）</li>
+</ol>
+</li>
+<li>在 cluster_idx 中找到目标索引记录，拿到对应的回滚段指针
+<ol>
+<li>遍历回滚段（版本链），比对每个版本的 trx_id 与 readView
+<ol>
+<li>如果 trx_id &gt; up_limit_id，说明该版本对应事务未提交，该版本不可读</li>
+<li>如果 trx_id &lt; low_limit_id，说明该版本对应事务已提交，该版本可读</li>
+<li>如果 up_limit_id &lt; trx_id &lt; low_limit_id，对 trx_ids 进行二分查找，如果找到 trx_id，说明该版本对应事务处于活跃状态，还没提交，该版本不可读；否则该版本可读。</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p>RR 与 RC 的差异在于生成 readView 过程，RR 在一个事务中只有一个 readView，RC 会为每个查询生成新的 readView。</p>
         </div>
 
         
@@ -393,7 +415,7 @@ MVCC 主要依赖：</p>
 
                     <footer id="footer">
     <div>
-        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        &copy; 2022 <a href="http://golb.cc/">cszxyang By </a>
         
     </div>
     <br />

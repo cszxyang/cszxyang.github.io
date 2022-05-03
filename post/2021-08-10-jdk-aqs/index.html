@@ -437,13 +437,16 @@
 <span style="color:#000;font-weight:bold">}</span>
 </code></pre></td></tr></table>
 </div>
-</div><p>看到上面的代码需要讲一些细节的地方，首先为什么每次自旋 <code>tryAcquire</code> 获取同步状态时要判断当前节点的前一个节点是否是头节点呢？即 <code>p == head</code>，因为 <code>AbstractQueuedSynchronizer</code> 释放同步状态时，会唤醒靠近队列哨兵的第一个非取消节点，也就是说这个节点具有获取锁的优先权，从这点来看，有点公平锁的意味，但其实 CLH 也是这样的，一个线程释放资源后会唤醒直接后继节点。</p>
-<p>如果线程自旋能够到获取同步状态，那么这个线程所在节点中的 thread 指针将被置空并成为新的哨兵节点，原哨兵节点会被删除引用关系等待垃圾回收器回收；而如果线程还是获取不到同步状态，那么会先进入 <code>shouldParkAfterFailedAcquire</code> 判断当前节点是否能被阻塞，此处涉及 Node 节点的 <code>waitStatus</code> 这个变量，它的取值范围在以下几个常量中：</p>
+</div><p>看到上面的代码需要讲一些细节的地方，首先为什么每次自旋 <code>tryAcquire</code> 获取同步状态时要判断当前节点的前一个节点是否是头节点呢？即 <code>p == head</code>，因为 <code>AbstractQueuedSynchronizer</code> 释放同步状态时，会唤醒靠近队列哨兵的第一个非取消节点，也就是说这个节点具有获取锁的优先权，从这点来看，有点公平锁的意味，但其实 CLH 就是这样的，一个线程释放资源后会唤醒直接后继节点。</p>
+<p>如果线程自旋能够获取到同步状态，那么这个线程所在节点中的 thread 指针将被置空并成为新的哨兵节点，原哨兵节点会被删除引用关系等待垃圾回收器回收；而如果线程还是获取不到同步状态，那么会先进入 <code>shouldParkAfterFailedAcquire</code> 判断当前节点是否能被阻塞，此处涉及 Node 节点的 <code>waitStatus</code> 这个变量，它的取值范围在以下几个常量中：</p>
 <ul>
-<li>CANCELLED：代表该节点存储的线程取消排队，那么这样的节点是需要清理的；</li>
-<li>SIGNAL：代表当前节点的后继节点需要被唤醒，因为阻塞的线程已经让出了 CPU，只能等待外界将之唤醒，所以线程休眠前，会在其前继节点中打上标记，告诉它当前线程让出时间片，而不是一直在自旋，因为这样会很浪费 CPU 资源，以后如果它释放了同步状态，需要向当前线程发出唤醒信号。</li>
+<li>CANCELLED：代表该节点存储的线程取消排队，那么这样的节点是需要清理的；
+<ul>
+<li>SIGNAL：代表当前节点的后继节点需要被唤醒，因为阻塞的线程已经让出了 CPU，只能等待外界将之唤醒，所以线程休眠前，会在其前继节点中打上标记，告诉它当前线程让出时间片，而不是一直在自旋，因为这样会很浪费 CPU 资源，以后如果它（前继节点）释放了同步状态，需要向当前线程发出唤醒信号。</li>
+</ul>
+</li>
 <li>CONDITION：待研究。</li>
-<li>PROPAGATE：与资源共享有关。</li>
+<li>PROPAGATE：与资源锁有关。</li>
 </ul>
 <div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
 <table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
@@ -469,7 +472,7 @@
 <ol>
 <li>如果当前节点的前继节点的 <code>waitStatus</code> 是否是 -1，则可以阻塞当前线程</li>
 <li>如果当前节点的前继节点的 <code>waitStatus</code> 是否是大于零，即值为 1，说明是取消了的，很可能前继的前继节点也是取消了的，于是触发取消节点的清理操作，这个设计很有意思，按我理解是用了一种类似懒加载的被动触发的思想。</li>
-<li>如果当前节点的是 0 或 -2 等其他什么值，那么就将该值改成 -1，表示当前线程将进行阻塞，其前继节点释放同步状态时，需要唤醒它，这种情况出现在队列初始化或清空后，哨兵节点的 <code>waitStatus</code> 为 0。<code>acquireQueued</code>  的下一次自旋获取锁失败的话将会走进 shouldParkAfterFailedAcquire 方法的第一个判断，然后满足阻塞条件，当前线程阻塞。</li>
+<li>如果当前节点的是 0 或 -2 等其他什么值，那么就将该值改成 -1，表示当前线程将进行阻塞，其前继节点释放同步状态时，需要唤醒它，这种情况出现在队列初始化或清空后，哨兵节点的 <code>waitStatus</code> 为 0。<code>acquireQueued</code>  的下一次自旋获取锁失败的话将会走进 shouldParkAfterFailedAcquire 方法的第一个判断 <code>ws == Node.SIGNAL</code>，由于满足阻塞条件，当前线程阻塞。</li>
 </ol>
 <div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
 <table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
@@ -676,7 +679,7 @@
 <span style="color:#000;font-weight:bold">}</span>
 </code></pre></td></tr></table>
 </div>
-</div><p>由于当前线程获取到锁了，所以 <code>setHeadAndPropagate</code> 会先将当前节点设置为哨兵节点，并记录旧哨兵，接下来的 第一个 if 的判断很复杂，分情况探究，注意转进来的 propagate 必定大于或等于 0。</p>
+</div><p>由于当前线程获取到锁了，所以 <code>setHeadAndPropagate</code> 会先将当前节点设置为哨兵节点，并记录旧哨兵，接下来的第一个 if 的判断很复杂，分情况探究，注意传进来的 propagate 必定大于或等于 0。</p>
 <ul>
 <li>判断为 true：
 <ol>
@@ -1369,7 +1372,7 @@ INFO [t3] - 获取到同步状态 =&gt; aqs:[0, null]
 
                     <footer id="footer">
     <div>
-        &copy; 2021 <a href="http://golb.cc/">cszxyang By </a>
+        &copy; 2022 <a href="http://golb.cc/">cszxyang By </a>
         
     </div>
     <br />
