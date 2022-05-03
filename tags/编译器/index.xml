@@ -6,11 +6,7 @@
     <description>Recent content in 编译器 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Wed, 10 Jun 2020 08:50:24 +0200</lastBuildDate>
-    
-	<atom:link href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Wed, 10 Jun 2020 08:50:24 +0200</lastBuildDate><atom:link href="http://golb.cc/tags/%E7%BC%96%E8%AF%91%E5%99%A8/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>写给黑客的 Java 编译器不完全指南</title>
       <link>http://golb.cc/post/2020-06-10-jdk-compiler/</link>

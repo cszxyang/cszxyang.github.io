@@ -6,11 +6,7 @@
     <description>Recent content in hashmap on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate>
-    
-	<atom:link href="http://golb.cc/tags/hashmap/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate><atom:link href="http://golb.cc/tags/hashmap/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>聊聊多线程环境下的 HashMap</title>
       <link>http://golb.cc/post/2021-06-03-hashmap-concurrency/</link>

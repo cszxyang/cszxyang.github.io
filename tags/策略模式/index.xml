@@ -6,11 +6,7 @@
     <description>Recent content in 策略模式 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Fri, 14 Aug 2020 08:50:24 +0200</lastBuildDate>
-    
-	<atom:link href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Fri, 14 Aug 2020 08:50:24 +0200</lastBuildDate><atom:link href="http://golb.cc/tags/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>记一次在实际项目中的策略设计模式应用</title>
       <link>http://golb.cc/post/2020-08-25-strategy-app/</link>

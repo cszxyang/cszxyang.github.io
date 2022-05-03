@@ -6,11 +6,7 @@
     <description>Recent content in 技术 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate>
-    
-	<atom:link href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate><atom:link href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>MyBatis 源码 - Plugin 插件实现过程</title>
       <link>http://golb.cc/post/2021-11-15-mybatis-plugin/</link>

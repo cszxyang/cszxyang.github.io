@@ -832,7 +832,7 @@ compiler<span style="color:#000;font-weight:bold">.</span><span style="color:#00
         </a>
     </p>
 <ul>
-<li><code>SupportedAnnotationTypes</code> 中写为&rdquo;*&quot;，表示作用于所有的类，不管有没有加上注解。</li>
+<li><code>SupportedAnnotationTypes</code> 中写为&quot;*&quot;，表示作用于所有的类，不管有没有加上注解。</li>
 <li><code>SupportedSourceVersion</code> 设置了受支持的源代码版本。</li>
 <li>覆盖了<code>init</code>方法，初始化上下文和相关组件。</li>
 <li>覆盖了 <code>process</code> 方法。对所有类的编译过程都需要调用此方法进行处理。该方法每轮调用一次，最后使用空元素集调用一次。因此，我们使用一个简单的 if 在最后一轮中什么都不做。对于其他轮次，我们使用上面定义的死循环代码检测器<code>EndlessLoopChecker</code>进行处理。该方法返回 true，以便其他处理器继续处理。</li>
