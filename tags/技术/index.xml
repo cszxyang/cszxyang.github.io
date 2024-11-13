@@ -2,107 +2,107 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>技术 on cszxyang</title>
-    <link>http://golb.cc/tags/%E6%8A%80%E6%9C%AF/</link>
+    <link>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</link>
     <description>Recent content in 技术 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate><atom:link href="http://golb.cc/tags/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate><atom:link href="http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>MyBatis 源码 - Plugin 插件实现过程</title>
-      <link>http://golb.cc/post/2021-11-15-mybatis-plugin/</link>
+      <link>http://cszxyang.cn/post/2021-11-15-mybatis-plugin/</link>
       <pubDate>Mon, 15 Nov 2021 12:52:51 +0800</pubDate>
       
-      <guid>http://golb.cc/post/2021-11-15-mybatis-plugin/</guid>
+      <guid>http://cszxyang.cn/post/2021-11-15-mybatis-plugin/</guid>
       <description>&lt;p&gt;MyBatis 的执行过程中主要涉及四个很重要的接口，分别是 Executor、ParameterHandler、ResultSetHandler 和 StatementHandler，为了方便用户在上述接口执行过程中植入增强逻辑，MyBatis 实现了插件支持，即用户可以定义对上述接口的方法拦截逻辑，MyBatis 将通过动态代理将这里逻辑植入到具体接口方法的执行过程中。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>MyBatis 源码 - Mapper 的动态代理实现过程</title>
-      <link>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</link>
+      <link>http://cszxyang.cn/post/2021-11-08-mybatis-mapper-proxy/</link>
       <pubDate>Mon, 08 Nov 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-11-08-mybatis-mapper-proxy/</guid>
+      <guid>http://cszxyang.cn/post/2021-11-08-mybatis-mapper-proxy/</guid>
       <description>&lt;p&gt;在使用 Mabatis 时往往需要有成对出现的 &lt;code&gt;.java&lt;/code&gt; 后缀格式 Mapper 接口文件及 &lt;code&gt;.xml&lt;/code&gt; 后缀格式的 XML 文件，其中 XML 文件放在资源目录，而 Java 文件自然放在运行目录，通过调用 Mapper 接口中定义的方法就能触发到其通过 namespace 关联的 XML 文件中的 SQL 语句，从而实现了业务逻辑与数据库交互的解耦，避免像传统 JDBC 编程那样在 Java 代码中写 SQL 与数据库交互，那么 Mybtis 是怎么将 Mapper 接口方法与 XML 中 SQL 语句进行绑定与触发的呢？下面我们通过测试方法 debug 调试进行进行代码跟踪。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>JDK 源码 - ThreadPoolExecutor</title>
-      <link>http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/</link>
+      <link>http://cszxyang.cn/post/2021-09-13-jdk-threadpoolexecutor/</link>
       <pubDate>Mon, 13 Sep 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-09-13-jdk-threadpoolexecutor/</guid>
+      <guid>http://cszxyang.cn/post/2021-09-13-jdk-threadpoolexecutor/</guid>
       <description>&lt;p&gt;ThreadPoolExecutor 是 Java 的线程池实现，其中封装了对线程的管理（包括创建、调度、销毁等）及任务的分配等逻辑，作为核心并发组件，其中使用到了如阻塞队列、ReentrantLock、原子变量等并发包下的基础工具，由于前面看完了 ReentrantLock 等相关的源码，所以尝试窥探下 ThreadPoolExecutor 的工作过程。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>JDK 源码 - ConcurrentHashMap 1.7</title>
-      <link>http://golb.cc/post/2021-08-28-jdk-chm7/</link>
+      <link>http://cszxyang.cn/post/2021-08-28-jdk-chm7/</link>
       <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-08-28-jdk-chm7/</guid>
+      <guid>http://cszxyang.cn/post/2021-08-28-jdk-chm7/</guid>
       <description>&lt;p&gt;由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>JDK 源码 - CountDownLatch</title>
-      <link>http://golb.cc/post/2021-08-22-jdk-countdownlatch/</link>
+      <link>http://cszxyang.cn/post/2021-08-22-jdk-countdownlatch/</link>
       <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-08-22-jdk-countdownlatch/</guid>
+      <guid>http://cszxyang.cn/post/2021-08-22-jdk-countdownlatch/</guid>
       <description>&lt;p&gt;前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>JDK 源码 - ReentrantLock</title>
-      <link>http://golb.cc/post/2021-08-19-jdk-reentrantlock/</link>
+      <link>http://cszxyang.cn/post/2021-08-19-jdk-reentrantlock/</link>
       <pubDate>Thu, 19 Aug 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-08-19-jdk-reentrantlock/</guid>
+      <guid>http://cszxyang.cn/post/2021-08-19-jdk-reentrantlock/</guid>
       <description>&lt;p&gt;前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 &lt;code&gt;ReentrantLock&lt;/code&gt; 内部是怎么实现的。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>JDK 源码 - AbstractQueuedSynchronizer</title>
-      <link>http://golb.cc/post/2021-08-10-jdk-aqs/</link>
+      <link>http://cszxyang.cn/post/2021-08-10-jdk-aqs/</link>
       <pubDate>Wed, 18 Aug 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-08-10-jdk-aqs/</guid>
+      <guid>http://cszxyang.cn/post/2021-08-10-jdk-aqs/</guid>
       <description>&lt;p&gt;前段时间线上遇到 &lt;code&gt;OOM&lt;/code&gt; 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 &lt;code&gt;AbstractQueuedSynchronizer&lt;/code&gt; ，没办法只好先把基础的组件搞明白。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>聊聊多线程环境下的 HashMap</title>
-      <link>http://golb.cc/post/2021-06-03-hashmap-concurrency/</link>
+      <link>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</link>
       <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-06-03-hashmap-concurrency/</guid>
+      <guid>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</guid>
       <description>&lt;p&gt;很久之前我写了这么一个并发异步的工具方法，传入的 &lt;code&gt;suppliers&lt;/code&gt; 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 &lt;code&gt;supplier&lt;/code&gt;，再通过多线程异步处理，最后统一收集完结果返回。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>浅谈 MySQL 的 MVCC 机制</title>
-      <link>http://golb.cc/post/2021-05-15-mvcc/</link>
+      <link>http://cszxyang.cn/post/2021-05-15-mvcc/</link>
       <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-05-15-mvcc/</guid>
+      <guid>http://cszxyang.cn/post/2021-05-15-mvcc/</guid>
       <description>&lt;p&gt;最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>记一次工作中数据库死锁问题定位与解决</title>
-      <link>http://golb.cc/post/2021-04-06-deadlock/</link>
+      <link>http://cszxyang.cn/post/2021-04-06-deadlock/</link>
       <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2021-04-06-deadlock/</guid>
+      <guid>http://cszxyang.cn/post/2021-04-06-deadlock/</guid>
       <description>&lt;p&gt;最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。&lt;/p&gt;</description>
     </item>
     
     <item>
       <title>记一次在实际项目中的策略设计模式应用</title>
-      <link>http://golb.cc/post/2020-08-25-strategy-app/</link>
+      <link>http://cszxyang.cn/post/2020-08-25-strategy-app/</link>
       <pubDate>Fri, 14 Aug 2020 08:50:24 +0200</pubDate>
       
-      <guid>http://golb.cc/post/2020-08-25-strategy-app/</guid>
+      <guid>http://cszxyang.cn/post/2020-08-25-strategy-app/</guid>
       <description>&lt;p&gt;最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 &lt;code&gt;longtext&lt;/code&gt; 类型的字段 &lt;code&gt;extend_info&lt;/code&gt; 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 &lt;code&gt;extend_info_cipher&lt;/code&gt; 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：&lt;/p&gt;</description>
     </item>
     

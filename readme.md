@@ -7,7 +7,7 @@ Personal blog built with `hugo`, decorated with `hugo-theme-maupassant`, reconst
 use following cmd to generate `public` folder
 
 ```
-hugo --theme=maupassant --baseUrl="http://golb.cc/" 
+hugo --theme=maupassant --baseUrl="http://cszxyang.cn/" 
 ```
 
 use following cmds for first commit
