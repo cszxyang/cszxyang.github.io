@@ -6,52 +6,7 @@
     <description>Recent content in 并发 on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 13 Sep 2021 10:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/tags/%E5%B9%B6%E5%8F%91/index.xml" rel="self" type="application/rss+xml" />
-    <item>
-      <title>JDK 源码 - ThreadPoolExecutor</title>
-      <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-09-13-jdk-threadpoolexecutor/</link>
-      <pubDate>Mon, 13 Sep 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-09-13-jdk-threadpoolexecutor/</guid>
-      <description>&lt;p&gt;ThreadPoolExecutor 是 Java 的线程池实现，其中封装了对线程的管理（包括创建、调度、销毁等）及任务的分配等逻辑，作为核心并发组件，其中使用到了如阻塞队列、ReentrantLock、原子变量等并发包下的基础工具，由于前面看完了 ReentrantLock 等相关的源码，所以尝试窥探下 ThreadPoolExecutor 的工作过程。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>JDK 源码 - ConcurrentHashMap 1.7</title>
-      <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-28-jdk-chm7/</link>
-      <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-28-jdk-chm7/</guid>
-      <description>&lt;p&gt;由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>JDK 源码 - CountDownLatch</title>
-      <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-22-jdk-countdownlatch/</link>
-      <pubDate>Sun, 22 Aug 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-22-jdk-countdownlatch/</guid>
-      <description>&lt;p&gt;前面已经了解了 AbstractQueuedSynchronizer 和 ReentrantLock 的原理，接下来看看共享锁组件 CountDownLatch 是如何基于 AbstractQueuedSynchronizer 实现，在我看来，如果能先了解 AbstractQueuedSynchronizer 的运作过程，那么再看 CountDownLatch 会觉得比较容易理解。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>JDK 源码 - ReentrantLock</title>
-      <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-19-jdk-reentrantlock/</link>
-      <pubDate>Thu, 19 Aug 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-19-jdk-reentrantlock/</guid>
-      <description>&lt;p&gt;前面已经或粗或细地看过了 AbstractQueuedSynchronizer 的源码，不妨趁热打铁把其常见的实现的源码也翻一遍，于是我们先来看 &lt;code&gt;ReentrantLock&lt;/code&gt; 内部是怎么实现的。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>JDK 源码 - AbstractQueuedSynchronizer</title>
-      <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-10-jdk-aqs/</link>
-      <pubDate>Wed, 18 Aug 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-10-jdk-aqs/</guid>
-      <description>&lt;p&gt;前段时间线上遇到 &lt;code&gt;OOM&lt;/code&gt; 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 &lt;code&gt;AbstractQueuedSynchronizer&lt;/code&gt; ，没办法只好先把基础的组件搞明白。&lt;/p&gt;</description>
-    </item>
-    
+    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/tags/%E5%B9%B6%E5%8F%91/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>聊聊多线程环境下的 HashMap</title>
       <link>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</link>
