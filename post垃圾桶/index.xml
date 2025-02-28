@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>技术 on cszxyang</title>
-    <link>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</link>
-    <description>Recent content in 技术 on cszxyang</description>
+    <title>Post垃圾桶s on cszxyang</title>
+    <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/</link>
+    <description>Recent content in Post垃圾桶s on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate><atom:link href="http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 15 Nov 2021 12:52:51 +0800</lastBuildDate><atom:link href="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>MyBatis 源码 - Plugin 插件实现过程</title>
       <link>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-11-15-mybatis-plugin/</link>
@@ -68,42 +68,6 @@
       
       <guid>http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-10-jdk-aqs/</guid>
       <description>&lt;p&gt;前段时间线上遇到 &lt;code&gt;OOM&lt;/code&gt; 问题，定位到的原因是线程池创建线程的个数过多，导致内存不够用；为此好奇去看了眼线程池的源码，发现线程池会在调度任务执行时才会创建实际的线程对象，但是再往下看时遇到了不懂的东西，比如 &lt;code&gt;AbstractQueuedSynchronizer&lt;/code&gt; ，没办法只好先把基础的组件搞明白。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>聊聊多线程环境下的 HashMap</title>
-      <link>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</link>
-      <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</guid>
-      <description>&lt;p&gt;很久之前我写了这么一个并发异步的工具方法，传入的 &lt;code&gt;suppliers&lt;/code&gt; 是具体的业务方法函数引用，考虑这个一个业务场景，我们需要去数据库统计某个表最近一个月在某个条件下的数量，那么为了提高响应效率，可以通过按天切分日期，然后组装成相应的 &lt;code&gt;supplier&lt;/code&gt;，再通过多线程异步处理，最后统一收集完结果返回。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>浅谈 MySQL 的 MVCC 机制</title>
-      <link>http://cszxyang.cn/post/2021-05-15-mvcc/</link>
-      <pubDate>Fri, 14 May 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post/2021-05-15-mvcc/</guid>
-      <description>&lt;p&gt;最近公司组织技术分享，因为刚好周末空闲时间在翻译 MySQL 的文档，接触到 MySQL 的 MVCC 机制，于是便选了这个点进行分享，虽然做了 PPT，但还是写个博客，串联一下思路。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>记一次工作中数据库死锁问题定位与解决</title>
-      <link>http://cszxyang.cn/post/2021-04-06-deadlock/</link>
-      <pubDate>Tue, 06 Apr 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post/2021-04-06-deadlock/</guid>
-      <description>&lt;p&gt;最近在工作中遇到了几次类似的数据库死锁的问题，通过比对死锁日志文件和代码，最终分析出了死锁的原因，并将之解决，因此写下此文作简单的经验记录。&lt;/p&gt;</description>
-    </item>
-    
-    <item>
-      <title>记一次在实际项目中的策略设计模式应用</title>
-      <link>http://cszxyang.cn/post/2020-08-25-strategy-app/</link>
-      <pubDate>Fri, 14 Aug 2020 08:50:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/post/2020-08-25-strategy-app/</guid>
-      <description>&lt;p&gt;最近在实际项目中遇到一个需求，背景是系统中有几张表使用了 &lt;code&gt;longtext&lt;/code&gt; 类型的字段 &lt;code&gt;extend_info&lt;/code&gt; 储存用户的一些比如电话号码、下单地址等敏感信息，出于对信息安全的考虑，该需求需要新增一个 &lt;code&gt;extend_info_cipher&lt;/code&gt; 字段并进行加解密操作，不过由于涉及的数据量较大，目前大致可分为四个阶段进行增量覆盖，每个增量递进通过参数配置触发：&lt;/p&gt;</description>
     </item>
     
   </channel>

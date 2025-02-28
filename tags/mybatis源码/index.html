@@ -87,7 +87,7 @@
     <article class="post">
         <header>
             <h1 class="post-title">
-                <a href="http://cszxyang.cn/post/2021-11-15-mybatis-plugin/" style="color: #4080cc">MyBatis 源码 - Plugin 插件实现过程</a>
+                <a href="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-11-15-mybatis-plugin/" style="color: #4080cc">MyBatis 源码 - Plugin 插件实现过程</a>
             </h1>
         </header>
         <date class="post-meta meta-date">
@@ -103,14 +103,14 @@
         
         <div class="post-content">
             <p>MyBatis 的执行过程中主要涉及四个很重要的接口，分别是 Executor、ParameterHandler、ResultSetHandler 和 StatementHandler，为了方便用户在上述接口执行过程中植入增强逻辑，MyBatis 实现了插件支持，即用户可以定义对上述接口的方法拦截逻辑，MyBatis 将通过动态代理将这里逻辑植入到具体接口方法的执行过程中。</p>……
-            <p class="readmore"><a href="http://cszxyang.cn/post/2021-11-15-mybatis-plugin/">阅读全文</a></p>
+            <p class="readmore"><a href="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-11-15-mybatis-plugin/">阅读全文</a></p>
         </div>
     </article>
     
     <article class="post">
         <header>
             <h1 class="post-title">
-                <a href="http://cszxyang.cn/post/2021-11-08-mybatis-mapper-proxy/" style="color: #4080cc">MyBatis 源码 - Mapper 的动态代理实现过程</a>
+                <a href="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-11-08-mybatis-mapper-proxy/" style="color: #4080cc">MyBatis 源码 - Mapper 的动态代理实现过程</a>
             </h1>
         </header>
         <date class="post-meta meta-date">
@@ -126,7 +126,7 @@
         
         <div class="post-content">
             <p>在使用 Mabatis 时往往需要有成对出现的 <code>.java</code> 后缀格式 Mapper 接口文件及 <code>.xml</code> 后缀格式的 XML 文件，其中 XML 文件放在资源目录，而 Java 文件自然放在运行目录，通过调用 Mapper 接口中定义的方法就能触发到其通过 namespace 关联的 XML 文件中的 SQL 语句，从而实现了业务逻辑与数据库交互的解耦，避免像传统 JDBC 编程那样在 Java 代码中写 SQL 与数据库交互，那么 Mybtis 是怎么将 Mapper 接口方法与 XML 中 SQL 语句进行绑定与触发的呢？下面我们通过测试方法 debug 调试进行进行代码跟踪。</p>……
-            <p class="readmore"><a href="http://cszxyang.cn/post/2021-11-08-mybatis-mapper-proxy/">阅读全文</a></p>
+            <p class="readmore"><a href="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-11-08-mybatis-mapper-proxy/">阅读全文</a></p>
         </div>
     </article>
     

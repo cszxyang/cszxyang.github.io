@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>JDK 源码 - ConcurrentHashMap 1.7 | cszxyang</title>
+    <meta property="og:title" content="JDK 源码 - ConcurrentHashMap 1.7 - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2021-08-22T10:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2021-08-22T10:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="JDK 源码 - ConcurrentHashMap 1.7">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://cszxyang.cn/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-28-jdk-chm7/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://cszxyang.cn/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="http://cszxyang.cn/">首页</a>
+                    
+                    <a  href="http://cszxyang.cn/categories/" title="分类">分类</a>
+                    
+                    <a  href="http://cszxyang.cn/tags/" title="标签">标签</a>
+                    
+                    <a  href="http://cszxyang.cn/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://cszxyang.cn/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                
+                <div class="col-10" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">JDK 源码 - ConcurrentHashMap 1.7</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2021年8月22日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>由于 JDK 1.7 的 ConcurrentHashMap 的实现使用到了 ReentrantLock，刚好前面也已经看过了 ReentrantLock 的实现，所以顺势看下 1.7 版本的 ConcurrentHashMap 是如何实现的。</p>
+<h3 id="一-简介">一. 简介</h3>
+<p>与 Hashtable 使用 synchronized 关键字对读写方法进行加锁不同，JDK 1.7 的 ConcurrentHashMap（以下简称 ConcurrentHashMap）使用了分段锁的思想，它将数据散列成一个 Segment 数组，每个 Segment 对象实际类似一个 HashMap，它们各自持有一个 HashEntry 数组，实际的键值对数据是存放到 HashEntry 数组中的，如果发生哈希冲突，则通过在 HashEntry 对象上构建链表存放哈希值一样的键值对。</p>
+<p>特别地，Segment 继承自 ReentrantLock，说明一个 Segment 就是一把锁，每个想要往 ConcurrentHashMap 写数据的线程都需要拿到相应分段的锁才行，而拿不到锁的线程，则需要重试与自旋，期间可以预先构建好需要的节点信息，然后如果有限次尝试后还是没能拿到锁，则会加入等待队列然后进行阻塞。</p>
+<h3 id="二-构造函数">二. 构造函数</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">ConcurrentHashMap</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">(</span>DEFAULT_INITIAL_CAPACITY<span style="color:#000;font-weight:bold">,</span> DEFAULT_LOAD_FACTOR<span style="color:#000;font-weight:bold">,</span> DEFAULT_CONCURRENCY_LEVEL<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * The default initial capacity for this table,
+</span><span style="color:#998;font-style:italic"> * used when not otherwise specified in a constructor.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> DEFAULT_INITIAL_CAPACITY <span style="color:#000;font-weight:bold">=</span> 16<span style="color:#000;font-weight:bold">;</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * The default load factor for this table, used when not
+</span><span style="color:#998;font-style:italic"> * otherwise specified in a constructor.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">float</span> DEFAULT_LOAD_FACTOR <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">75f</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * The default concurrency level for this table, used when not
+</span><span style="color:#998;font-style:italic"> * otherwise specified in a constructor.
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> DEFAULT_CONCURRENCY_LEVEL <span style="color:#000;font-weight:bold">=</span> 16<span style="color:#000;font-weight:bold">;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>归根到底都是调用下面的这个构造方法，主要以默认的入参进行分析</p>
+<ol>
+<li>检查入参的合法性</li>
+<li><code>concurrencyLevel</code> 与 <code>Segment</code> 数组的初始长度的计算有关，因为 <code>Segment</code> 数组的长度 <code>ssize</code> 必须是 2 的次幂，所以在计算 <code>ssize</code> 是会进行控制，如输入 <code>concurrencyLevel</code> 为 16，则 <code>ssize</code> 会从 1 开始右移直到确保值不比 <code>concurrencyLevel</code> 小，所以 <code>sshift</code> 为 4，<code>ssize</code> 等于 16，但如果 <code>concurrencyLevel</code> 等于 17，则 <code>sshift</code> 为 5，<code>ssize</code> 等于 32。</li>
+<li><code>segmentShift</code> 赋值为 32 - 4 =  28，<code>segmentMask</code> 赋值为 16 - 1=  15。</li>
+<li><code>initialCapacity</code> 为总共能够存放的键值对数，均摊到每个 Segment 中，则能知道每个 Segment 至少应该存放多少个，然后由于传进来的 <code>initialCapacity</code> 可能很大，<code>concurrencyLevel</code> 比较小，为了保证每个 Segment  都能有足够的数组空间存放键值对，避免哈希冲突，需要对 c 进行向上取整，然后为了保证 <code>HashEntry</code> 数组的长度是 2 的次幂，需要对 cap 进行左移运算。</li>
+<li>然后创建一个 Segment 数组 <code>ss</code>，长度为 16，另外还创建了一个 Segment 对象  <code>s0</code> ，它的 <code>loadFactor</code> 为 0.75，扩容阈值 <code>threshold</code> 为 12，创建 <code>HashEntry</code> 数组且长度为 2，然后通过 Unsafe 操作内存，将 s0 放到 ss 的起始地址上，刚好占满第一个索引位置，即 s0 = ss[0]。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> <span style="color:#900;font-weight:bold">ConcurrentHashMap</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> initialCapacity<span style="color:#000;font-weight:bold">,</span>
+                         <span style="color:#458;font-weight:bold">float</span> loadFactor<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> concurrencyLevel<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!(</span>loadFactor <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">||</span> initialCapacity <span style="color:#000;font-weight:bold">&lt;</span> 0 <span style="color:#000;font-weight:bold">||</span> concurrencyLevel <span style="color:#000;font-weight:bold">&lt;=</span> 0<span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> IllegalArgumentException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>concurrencyLevel <span style="color:#000;font-weight:bold">&gt;</span> MAX_SEGMENTS<span style="color:#000;font-weight:bold">)</span>
+        concurrencyLevel <span style="color:#000;font-weight:bold">=</span> MAX_SEGMENTS<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">// Find power-of-two sizes best matching arguments
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">int</span> sshift <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> ssize <span style="color:#000;font-weight:bold">=</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>ssize <span style="color:#000;font-weight:bold">&lt;</span> concurrencyLevel<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">++</span>sshift<span style="color:#000;font-weight:bold">;</span>
+        ssize <span style="color:#000;font-weight:bold">&lt;&lt;=</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">segmentShift</span> <span style="color:#000;font-weight:bold">=</span> 32 <span style="color:#000;font-weight:bold">-</span> sshift<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">segmentMask</span> <span style="color:#000;font-weight:bold">=</span> ssize <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>initialCapacity <span style="color:#000;font-weight:bold">&gt;</span> MAXIMUM_CAPACITY<span style="color:#000;font-weight:bold">)</span>
+        initialCapacity <span style="color:#000;font-weight:bold">=</span> MAXIMUM_CAPACITY<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> initialCapacity <span style="color:#000;font-weight:bold">/</span> ssize<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>c <span style="color:#000;font-weight:bold">*</span> ssize <span style="color:#000;font-weight:bold">&lt;</span> initialCapacity<span style="color:#000;font-weight:bold">)</span>
+        <span style="color:#000;font-weight:bold">++</span>c<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> cap <span style="color:#000;font-weight:bold">=</span> MIN_SEGMENT_TABLE_CAPACITY<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>cap <span style="color:#000;font-weight:bold">&lt;</span> c<span style="color:#000;font-weight:bold">)</span>
+        cap <span style="color:#000;font-weight:bold">&lt;&lt;=</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">// create segments and segments[0]
+</span><span style="color:#998;font-style:italic"></span>    Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> s0 <span style="color:#000;font-weight:bold">=</span>
+        <span style="color:#000;font-weight:bold">new</span> Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;(</span>loadFactor<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)(</span>cap <span style="color:#000;font-weight:bold">*</span> loadFactor<span style="color:#000;font-weight:bold">),</span>
+                         <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[])</span><span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">[</span>cap<span style="color:#000;font-weight:bold">]);</span>
+    Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> ss <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[])</span><span style="color:#000;font-weight:bold">new</span> Segment<span style="color:#000;font-weight:bold">[</span>ssize<span style="color:#000;font-weight:bold">];</span>
+    UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">putOrderedObject</span><span style="color:#000;font-weight:bold">(</span>ss<span style="color:#000;font-weight:bold">,</span> SBASE<span style="color:#000;font-weight:bold">,</span> s0<span style="color:#000;font-weight:bold">);</span> <span style="color:#998;font-style:italic">// ordered write of segments[0]
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">segments</span> <span style="color:#000;font-weight:bold">=</span> ss<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * The minimum capacity for per-segment tables.  Must be a power
+</span><span style="color:#998;font-style:italic"> * of two, at least two to avoid immediate resizing on next use
+</span><span style="color:#998;font-style:italic"> * after lazy construction.
+</span><span style="color:#998;font-style:italic"> * 每个 segment 存放的 Entry 数组的最小长度，至少是 2 且为 2 的次幂
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> MIN_SEGMENT_TABLE_CAPACITY <span style="color:#000;font-weight:bold">=</span> 2<span style="color:#000;font-weight:bold">;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>所以调用完默认的无参构造函数后，得到的 <code>ConcurrentHashMap</code> 数据结构状态如下图所示：</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-28_01-31-42.png">
+            <img class="mx-auto" alt="Snipaste_2021-08-28_01-31-42.png" src="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-28_01-31-42.png" />
+        </a>
+    </p>
+<h3 id="三-添加元素">三. 添加元素</h3>
+<p>添加元素操作在 put 方法中实现，主要过程：</p>
+<ol>
+<li>不允许键值对的值为空的情况。</li>
+<li>计算得到扰动后的哈希值，采用了 Wang/Jenkins hash 算法变体。</li>
+<li><code>hash &gt;&gt;&gt; segmentShift</code> 哈希值无符号右移 28 位，这时高 4 位移到了低 4 位，然后通过 segmentMask 掩码屏蔽新的高 28 位，即只关心新的低 4 位，也就是让 hash 值的高 n 位参与运算，这个 n 与 Segment 数组的长度对应，其实也就是为了增大哈希值的随机性，作二次扰动。</li>
+<li>获取 Segment 数组的第 j 个元素，如果该位置的元素还没有初始化，则调用 <code>ensureSegment</code> 初始化该位置的 Segment  对象，然后再将键值对放到里面。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> V <span style="color:#900;font-weight:bold">put</span><span style="color:#000;font-weight:bold">(</span>K key<span style="color:#000;font-weight:bold">,</span> V value<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> s<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>value <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>  <span style="color:#000;font-weight:bold">throw</span> <span style="color:#000;font-weight:bold">new</span> NullPointerException<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#458;font-weight:bold">int</span> hash <span style="color:#000;font-weight:bold">=</span> hash<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">int</span> j <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>hash <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> segmentShift<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> segmentMask<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObject</span>          <span style="color:#998;font-style:italic">// nonvolatile; recheck
+</span><span style="color:#998;font-style:italic"></span>         <span style="color:#000;font-weight:bold">(</span>segments<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">(</span>j <span style="color:#000;font-weight:bold">&lt;&lt;</span> SSHIFT<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">+</span> SBASE<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#998;font-style:italic">//  in ensureSegment
+</span><span style="color:#998;font-style:italic"></span>        s <span style="color:#000;font-weight:bold">=</span> ensureSegment<span style="color:#000;font-weight:bold">(</span>j<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">put</span><span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">,</span> hash<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p><code>ensureSegment</code> 入参是 Segment 数组的下标，顾名思义就是保证 Segment 数组该下标的元素一定要初始化完成。主要过程</p>
+<ol>
+<li>获取该位置的 Segment  对象，如果是空的，则使用 ss[0] 作为复制的原型。</li>
+<li>基于原型的参数，计算与初始化新 Segment 的参数。</li>
+<li>由于此前可能有另一条线程初始化了该位置的 Segment，所以需要进行二次检查。</li>
+<li>校验通过则创建新的 Segment 对象 s，不停自旋，直到 CAS 成功将该位置从 null 设置为 s，并返回 s；或者有另一条并发的线程往该位置设置了另外一个新的 Segment 对象 s1，则退出自旋，并返回 s1。</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#900;font-weight:bold">ensureSegment</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> k<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">final</span> Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> ss <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">segments</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">long</span> u <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>k <span style="color:#000;font-weight:bold">&lt;&lt;</span> SSHIFT<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">+</span> SBASE<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// raw offset
+</span><span style="color:#998;font-style:italic"></span>    Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> seg<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>seg <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span><span style="color:#000;font-weight:bold">(</span>ss<span style="color:#000;font-weight:bold">,</span> u<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> proto <span style="color:#000;font-weight:bold">=</span> ss<span style="color:#000;font-weight:bold">[</span>0<span style="color:#000;font-weight:bold">];</span> <span style="color:#998;font-style:italic">// use segment 0 as prototype
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#458;font-weight:bold">int</span> cap <span style="color:#000;font-weight:bold">=</span> proto<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">table</span><span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#458;font-weight:bold">float</span> lf <span style="color:#000;font-weight:bold">=</span> proto<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">loadFactor</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#458;font-weight:bold">int</span> threshold <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)(</span>cap <span style="color:#000;font-weight:bold">*</span> lf<span style="color:#000;font-weight:bold">);</span>
+        HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> tab <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[])</span><span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">[</span>cap<span style="color:#000;font-weight:bold">];</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>seg <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span><span style="color:#000;font-weight:bold">(</span>ss<span style="color:#000;font-weight:bold">,</span> u<span style="color:#000;font-weight:bold">))</span>
+            <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#998;font-style:italic">// recheck
+</span><span style="color:#998;font-style:italic"></span>            Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;(</span>lf<span style="color:#000;font-weight:bold">,</span> threshold<span style="color:#000;font-weight:bold">,</span> tab<span style="color:#000;font-weight:bold">);</span>
+            <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">((</span>seg <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span><span style="color:#000;font-weight:bold">(</span>ss<span style="color:#000;font-weight:bold">,</span> u<span style="color:#000;font-weight:bold">))</span>
+                   <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">compareAndSwapObject</span><span style="color:#000;font-weight:bold">(</span>ss<span style="color:#000;font-weight:bold">,</span> u<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">,</span> seg <span style="color:#000;font-weight:bold">=</span> s<span style="color:#000;font-weight:bold">))</span>
+                    <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> seg<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>然后调用 Segment 的 put 方法，将键值对放到具体的 HashEntry 数组中，主要过程</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-27_22-44-26.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-27_22-44-26.png" />
+        </a>
+    </p>
+<ol>
+<li>通过 <code>tryLock</code> 方法尝试获取锁，变量 node 代表插入的键值对的信息，如果获取锁成功则在临界区内寻找插入位置，否则调用  <code>scanAndLockForPut</code> 预创建 <code>HashEntry</code> 节点。</li>
+<li>当 node 为 null：即一次 <code>CAS</code> 就能获取到锁，则通过哈希值对应节点在 <code>HashEntry</code> 数组中的位置，然后遍历其冲突链表
+<ol>
+<li>如果遍历期间找到 key 相等的键值对，则更新 value 然后退出。</li>
+<li>如果遍历完整个链表都没找到可以更新键值对，则将节点插入到链表的头部，插入后可能超过 Segment 的容量限制，则需要检查是否需要扩容，是则扩容。</li>
+</ol>
+</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">final</span> V <span style="color:#900;font-weight:bold">put</span><span style="color:#000;font-weight:bold">(</span>K key<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> hash<span style="color:#000;font-weight:bold">,</span> V value<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">boolean</span> onlyIfAbsent<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> node <span style="color:#000;font-weight:bold">=</span> tryLock<span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">?</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">:</span> scanAndLockForPut<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">,</span> hash<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">);</span>
+    V oldValue<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">try</span> <span style="color:#000;font-weight:bold">{</span>
+        HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> tab <span style="color:#000;font-weight:bold">=</span> table<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#458;font-weight:bold">int</span> index <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>tab<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> hash<span style="color:#000;font-weight:bold">;</span>
+        HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> first <span style="color:#000;font-weight:bold">=</span> entryAt<span style="color:#000;font-weight:bold">(</span>tab<span style="color:#000;font-weight:bold">,</span> index<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">=</span> first<span style="color:#000;font-weight:bold">;;)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>e <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                K k<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>k <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> key <span style="color:#000;font-weight:bold">||</span>
+                    <span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">==</span> hash <span style="color:#000;font-weight:bold">&amp;&amp;</span> key<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>k<span style="color:#000;font-weight:bold">)))</span> <span style="color:#000;font-weight:bold">{</span>
+                    oldValue <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span><span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(!</span>onlyIfAbsent<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                        e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span> <span style="color:#000;font-weight:bold">=</span> value<span style="color:#000;font-weight:bold">;</span>
+                        <span style="color:#000;font-weight:bold">++</span>modCount<span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#000;font-weight:bold">}</span>
+                    <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">}</span>
+                e <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>node <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setNext</span><span style="color:#000;font-weight:bold">(</span>first<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                    node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;(</span>hash<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">,</span> first<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+                <span style="color:#458;font-weight:bold">int</span> c <span style="color:#000;font-weight:bold">=</span> count <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>c <span style="color:#000;font-weight:bold">&gt;</span> threshold <span style="color:#000;font-weight:bold">&amp;&amp;</span> tab<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">&lt;</span> MAXIMUM_CAPACITY<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    rehash<span style="color:#000;font-weight:bold">(</span>node<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span>
+                    setEntryAt<span style="color:#000;font-weight:bold">(</span>tab<span style="color:#000;font-weight:bold">,</span> index<span style="color:#000;font-weight:bold">,</span> node<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+                <span style="color:#000;font-weight:bold">++</span>modCount<span style="color:#000;font-weight:bold">;</span>
+                count <span style="color:#000;font-weight:bold">=</span> c<span style="color:#000;font-weight:bold">;</span>
+                oldValue <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span> <span style="color:#000;font-weight:bold">finally</span> <span style="color:#000;font-weight:bold">{</span>
+        unlock<span style="color:#000;font-weight:bold">();</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> oldValue<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>下面再看 <code>scanAndLockForPut</code> 方法，获取不到锁的线程将进入到这里，</p>
+<p>
+        <a data-fancybox="gallery" href="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-28_01-06-22.png">
+            <img class="mx-auto" alt="img" src="/images/java/jdk/concurrent/CHM/Snipaste_2021-08-28_01-06-22.png" />
+        </a>
+    ]</p>
+<ol>
+<li>获取目标插入到 HashEntry 数组的节点 e</li>
+<li>自旋尝试加锁，如果失败
+<ol>
+<li>如果第一次重试（retries = -1），
+<ol>
+<li>如果 e 没初始化，则预初始化一个节点并让 node 指向它， retries++，然后重试</li>
+<li>如果 e 的 key 与要插入的 key 相同，则为更新，但由于没获取到锁，不做任何动作，仅 retries++，然后重试</li>
+<li>以上两种情况都不是，则继续往后遍历，但不会有 retries++，即下一次自旋还是会进入到 <code>retries &lt; 0</code> 的 if 中</li>
+</ol>
+</li>
+<li>第 n 次重试（-1 &lt; retries &lt; MAX_SCAN_RETRIES）：如果 retries 的次数超过了 <code>MAX_SCAN_RETRIES</code>，则调用父类 <code>ReentrantLock</code> 的 lock 方法并跳出死循环，当然 lock 方法中还会进行几次重试，如果还是不成功，则进入等待队列并阻塞。值得一提的是，<code>MAX_SCAN_RETRIES</code> 的值与当前操作系统的处理器数有关。</li>
+<li><code>(retries &amp; 1) == 0</code> 表示偶数次重试：尝试获取目标 HashEntry 数组的入口，如果已经变了，即不等于一开始拿到的 first，说明别的线程将该位置初始化，那么当前线程前期初始化的 HashEntry 需要作废，所以将 retries 改回 -1，等下一次死循环将进入 <code>retries &lt; 0</code> 的 if 重新生成新的 HashEntry 节点并继续自旋重试。</li>
+</ol>
+</li>
+</ol>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#900;font-weight:bold">scanAndLockForPut</span><span style="color:#000;font-weight:bold">(</span>K key<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> hash<span style="color:#000;font-weight:bold">,</span> V value<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> first <span style="color:#000;font-weight:bold">=</span> entryForHash<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">,</span> hash<span style="color:#000;font-weight:bold">);</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">=</span> first<span style="color:#000;font-weight:bold">;</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> retries <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>1<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// negative while locating node
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(!</span>tryLock<span style="color:#000;font-weight:bold">())</span> <span style="color:#000;font-weight:bold">{</span>
+        HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> f<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// to recheck first below
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>retries <span style="color:#000;font-weight:bold">&lt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>e <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>node <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#998;font-style:italic">// speculatively create node
+</span><span style="color:#998;font-style:italic"></span>                    node <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;(</span>hash<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">,</span> value<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">);</span>
+                retries <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">))</span>
+                retries <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">else</span>
+                e <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(++</span>retries <span style="color:#000;font-weight:bold">&gt;</span> MAX_SCAN_RETRIES<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            lock<span style="color:#000;font-weight:bold">();</span>
+            <span style="color:#000;font-weight:bold">break</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>retries <span style="color:#000;font-weight:bold">&amp;</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> 0 <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+                 <span style="color:#000;font-weight:bold">(</span>f <span style="color:#000;font-weight:bold">=</span> entryForHash<span style="color:#000;font-weight:bold">(</span><span style="color:#000;font-weight:bold">this</span><span style="color:#000;font-weight:bold">,</span> hash<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">!=</span> first<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            e <span style="color:#000;font-weight:bold">=</span> first <span style="color:#000;font-weight:bold">=</span> f<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// re-traverse if entry changed
+</span><span style="color:#998;font-style:italic"></span>            retries <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">-</span>1<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> node<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#458;font-weight:bold">int</span> MAX_SCAN_RETRIES <span style="color:#000;font-weight:bold">=</span> Runtime<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getRuntime</span><span style="color:#000;font-weight:bold">().</span><span style="color:#008080">availableProcessors</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">&gt;</span> 1 <span style="color:#000;font-weight:bold">?</span> 64 <span style="color:#000;font-weight:bold">:</span> 1<span style="color:#000;font-weight:bold">;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p><code>entryForHash</code> 用于获取 hash 值对应在当前 Segment 的 HashEntry 节点，如 hash = 16，则 <code>(tab.length - 1) &amp; h) = 0</code>，即获取 tab[0] 的节点，如果 table 没初始化或者 tab[0] 未初始化都会返回 null，否则返回具体的 HashEntry 节点。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">static</span> <span style="color:#000;font-weight:bold">final</span> <span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> <span style="color:#900;font-weight:bold">entryForHash</span><span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> seg<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">int</span> h<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> tab<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">(</span>seg <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">(</span>tab <span style="color:#000;font-weight:bold">=</span> seg<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">table</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">?</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">:</span>
+    <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span> UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span>
+        <span style="color:#000;font-weight:bold">(</span>tab<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">((</span><span style="color:#458;font-weight:bold">long</span><span style="color:#000;font-weight:bold">)(((</span>tab<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> h<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> TSHIFT<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">+</span> TBASE<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="四-扩容">四. 扩容</h3>
+<p>上面的 put 方法中提到，在插入一个键值对前，需要先检查容量是否超过阈值，如果是，则需扩容，下面是扩容的方法逻辑，其中入参是当前插入的节点。注意这里的扩容指的是 Segment 内部的扩容，而不是整个 ConcurrentHashMap 的扩容，也就是说 Segment 数组的长度是不可变的了，但是每个 Segment 内部的 HashEntry 数组可以进行扩展。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">rehash</span><span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> node<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> oldTable <span style="color:#000;font-weight:bold">=</span> table<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> oldCapacity <span style="color:#000;font-weight:bold">=</span> oldTable<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> newCapacity <span style="color:#000;font-weight:bold">=</span> oldCapacity <span style="color:#000;font-weight:bold">&lt;&lt;</span> 1<span style="color:#000;font-weight:bold">;</span>
+    threshold <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span><span style="color:#000;font-weight:bold">)(</span>newCapacity <span style="color:#000;font-weight:bold">*</span> loadFactor<span style="color:#000;font-weight:bold">);</span>
+    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> newTable <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[])</span> <span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">[</span>newCapacity<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#458;font-weight:bold">int</span> sizeMask <span style="color:#000;font-weight:bold">=</span> newCapacity <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> oldCapacity <span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">=</span> oldTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">];</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>e <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> next <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#458;font-weight:bold">int</span> idx <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">&amp;</span> sizeMask<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>next <span style="color:#000;font-weight:bold">==</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span>   <span style="color:#998;font-style:italic">//  Single node on list
+</span><span style="color:#998;font-style:italic"></span>                newTable<span style="color:#000;font-weight:bold">[</span>idx<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">else</span> <span style="color:#000;font-weight:bold">{</span> <span style="color:#998;font-style:italic">// Reuse consecutive sequence at same slot
+</span><span style="color:#998;font-style:italic"></span>                HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> lastRun <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#458;font-weight:bold">int</span> lastIdx <span style="color:#000;font-weight:bold">=</span> idx<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> last <span style="color:#000;font-weight:bold">=</span> next<span style="color:#000;font-weight:bold">;</span> last <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span> last <span style="color:#000;font-weight:bold">=</span> last<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    <span style="color:#458;font-weight:bold">int</span> k <span style="color:#000;font-weight:bold">=</span> last<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">&amp;</span> sizeMask<span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>k <span style="color:#000;font-weight:bold">!=</span> lastIdx<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                        lastIdx <span style="color:#000;font-weight:bold">=</span> k<span style="color:#000;font-weight:bold">;</span>
+                        lastRun <span style="color:#000;font-weight:bold">=</span> last<span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#000;font-weight:bold">}</span>
+                <span style="color:#000;font-weight:bold">}</span>
+                newTable<span style="color:#000;font-weight:bold">[</span>lastIdx<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> lastRun<span style="color:#000;font-weight:bold">;</span>
+                <span style="color:#998;font-style:italic">// Clone remaining nodes
+</span><span style="color:#998;font-style:italic"></span>                <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> p <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">;</span> p <span style="color:#000;font-weight:bold">!=</span> lastRun<span style="color:#000;font-weight:bold">;</span> p <span style="color:#000;font-weight:bold">=</span> p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+                    V v <span style="color:#000;font-weight:bold">=</span> p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span><span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#458;font-weight:bold">int</span> h <span style="color:#000;font-weight:bold">=</span> p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span><span style="color:#000;font-weight:bold">;</span>
+                    <span style="color:#458;font-weight:bold">int</span> k <span style="color:#000;font-weight:bold">=</span> h <span style="color:#000;font-weight:bold">&amp;</span> sizeMask<span style="color:#000;font-weight:bold">;</span>
+                    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> n <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">[</span>k<span style="color:#000;font-weight:bold">];</span>
+                    newTable<span style="color:#000;font-weight:bold">[</span>k<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;(</span>h<span style="color:#000;font-weight:bold">,</span> p<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">,</span> v<span style="color:#000;font-weight:bold">,</span> n<span style="color:#000;font-weight:bold">);</span>
+                <span style="color:#000;font-weight:bold">}</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#458;font-weight:bold">int</span> nodeIndex <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">&amp;</span> sizeMask<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// add the new node
+</span><span style="color:#998;font-style:italic"></span>    node<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">setNext</span><span style="color:#000;font-weight:bold">(</span>newTable<span style="color:#000;font-weight:bold">[</span>nodeIndex<span style="color:#000;font-weight:bold">]);</span>
+    newTable<span style="color:#000;font-weight:bold">[</span>nodeIndex<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> node<span style="color:#000;font-weight:bold">;</span>
+    table <span style="color:#000;font-weight:bold">=</span> newTable<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>上述代码的大致过程：</p>
+<ol>
+<li>基于旧 table 计算新的 table 的容量（原来的两倍）、扩容阈值、容量掩码等；</li>
+<li>遍历 HashEntry 数组，计算每个节点 e 在新数组中的索引 idx（通过新的容量掩码）
+<ol>
+<li>如果 e 的后继为 null，说明只有链表中只有一个节点，则直接将 e 放入新的数组中的新位置处（newTable[idx]）</li>
+<li>如果后继还有非空节点，则往后遍历
+<ol>
+<li>找到最后一个与前面节点的哈希结果不一样的节点 lastRun，也就是说 lastRun 后面的节点都是要搬到新数组的同一个索引里面的，为了省事，直接一整条链表搬过去。</li>
+<li>然后对于 lastRun 前面的节点，由于它们去往的 “桶” 不一样，所以需要一个个头插到相应的 “桶口” 位置。</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>处理完历史的节点，需要将 node 节点放在新的 HashEntry 数组里面，结束。</li>
+</ol>
+<h3 id="五-查询元素">五. 查询元素</h3>
+<p>相比于写入，查询元素的逻辑比较简单，注意这里没有加锁，只是获取 Segment 和 HashEntry 时都用到了 <code>getObjectVolatile</code> 方法，字面上理解，<code>getObjectVolatile</code> 有 <code>Volatile</code> 字样，则其他线程对相应对象的改动能被当前线程感知到。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> V <span style="color:#900;font-weight:bold">get</span><span style="color:#000;font-weight:bold">(</span>Object key<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> s<span style="color:#000;font-weight:bold">;</span> <span style="color:#998;font-style:italic">// manually integrate access methods to reduce overhead
+</span><span style="color:#998;font-style:italic"></span>    HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;[]</span> tab<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#458;font-weight:bold">int</span> h <span style="color:#000;font-weight:bold">=</span> hash<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#458;font-weight:bold">long</span> u <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(((</span>h <span style="color:#000;font-weight:bold">&gt;&gt;&gt;</span> segmentShift<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> segmentMask<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> SSHIFT<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">+</span> SBASE<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>s <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>Segment<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span>UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span><span style="color:#000;font-weight:bold">(</span>segments<span style="color:#000;font-weight:bold">,</span> u<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span> <span style="color:#000;font-weight:bold">&amp;&amp;</span>
+        <span style="color:#000;font-weight:bold">(</span>tab <span style="color:#000;font-weight:bold">=</span> s<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">table</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;</span> e <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>HashEntry<span style="color:#000;font-weight:bold">&lt;</span>K<span style="color:#000;font-weight:bold">,</span>V<span style="color:#000;font-weight:bold">&gt;)</span> UNSAFE<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">getObjectVolatile</span>
+             <span style="color:#000;font-weight:bold">(</span>tab<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">((</span><span style="color:#458;font-weight:bold">long</span><span style="color:#000;font-weight:bold">)(((</span>tab<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> h<span style="color:#000;font-weight:bold">))</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> TSHIFT<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">+</span> TBASE<span style="color:#000;font-weight:bold">);</span>
+             e <span style="color:#000;font-weight:bold">!=</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span> e <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">next</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            K k<span style="color:#000;font-weight:bold">;</span>
+            <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>k <span style="color:#000;font-weight:bold">=</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">key</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> key <span style="color:#000;font-weight:bold">||</span> <span style="color:#000;font-weight:bold">(</span>e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">hash</span> <span style="color:#000;font-weight:bold">==</span> h <span style="color:#000;font-weight:bold">&amp;&amp;</span> key<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">equals</span><span style="color:#000;font-weight:bold">(</span>k<span style="color:#000;font-weight:bold">)))</span>
+                <span style="color:#000;font-weight:bold">return</span> e<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">value</span><span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">null</span><span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>上面代码比较好理解，主要过程为：</p>
+<ol>
+<li>计算哈希值 h，并通过 h 计算到目标的 Segment 数组下标</li>
+<li>如果 Segment 节点已经初始化且其中的 HashEntry 数组 tab 也初始化了，则获取计算目标节点在 tab 的索引 j，并拿到 e=tab[j]，遍历以 e 为头节点的链表，如果找到目标，则返回，结束。</li>
+</ol>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-22-jdk-countdownlatch/" style="color: #0969da">JDK 源码 - CountDownLatch</a></li>
+        
+        <li><a href="/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-19-jdk-reentrantlock/" style="color: #0969da">JDK 源码 - ReentrantLock</a></li>
+        
+        <li><a href="/post%E5%9E%83%E5%9C%BE%E6%A1%B6/2021-08-10-jdk-aqs/" style="color: #0969da">JDK 源码 - AbstractQueuedSynchronizer</a></li>
+        
+        <li><a href="/post/2021-06-03-hashmap-concurrency/" style="color: #0969da">聊聊多线程环境下的 HashMap</a></li>
+        
+        <li><a href="/post/2020-08-25-strategy-app/" style="color: #0969da">记一次在实际项目中的策略设计模式应用</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/%E5%B9%B6%E5%8F%91'>并发</a></li>
+                
+                <li><a href='/tags/%E6%BA%90%E7%A0%81'>源码</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2025 <a href="http://cszxyang.cn/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
