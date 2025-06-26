@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>AES 加密算法实现 | cszxyang</title>
+    <meta property="og:title" content="AES 加密算法实现 - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2018-10-18T17:35:12&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2018-10-18T17:35:12&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="AES 加密算法实现">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://cszxyang.cn/post/2018-10-18-impl-of-aes/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://cszxyang.cn/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://cszxyang.cn/">首页</a>
+                    
+                    <a  href="http://cszxyang.cn/categories/" title="分类">分类</a>
+                    
+                    <a  href="http://cszxyang.cn/tags/" title="标签">标签</a>
+                    
+                    <a  href="http://cszxyang.cn/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://cszxyang.cn/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                
+                <div class="col-10" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">AES 加密算法实现</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2018年10月18日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>上次实现了 DES 加密算法，接下来继续深入同为对称加密算法并广为应用的 AES 算法。</p>
+<h2 id="一-概述">一. 概述</h2>
+<p>美国政府在1997年9月12日公开征集更高效更安全的替代DES加密算法，第一轮共有15种算法入选，其中5种算法入围了决赛，分别是MARS，RC6，Rijndael，Serpent和Twofish。又经过3年的验证、评测及公众讨论之后Rijndael算法最终入选。</p>
+<p>Rijndael算法之所以最终能够被选为AES的原因是其安全、性能好、效率高、实用灵活。</p>
+<p>Rijndael算法支持多种分组及密钥长度，介于128-256之间所有32的倍数均可，最小支持128位，最大256位，而AES标准支持的分组大小固定为128位，密钥长度有3种选择：128位、192位及256位。</p>
+<h2 id="二-aes算法的数学基础">二. AES算法的数学基础</h2>
+<p>Rijndaels算法中的许多运算是按字节和4字节的字来定义的。把一个字节看成是在有限域GF(2^8)上的一个元素。有限域（Finite Field）又名伽罗瓦域（Galois field），简单言之就是一个满足特定规则的集合，集合中的元素可以进行加减乘除运算，且运算结果也是属于此集合。</p>
+<h3 id="1-有限域">1. 有限域</h3>
+<p>AES的基础域是有限域 GF(2⁸)</p>
+<ul>
+<li>一个字节的全体256种取值构成一个GF(2⁸)</li>
+<li>一个GF(2)上的8次既约多项式可生成一个 GF(2⁸)</li>
+<li>GF(2⁸)的全体元素构成加法交换群、线性空间。</li>
+<li>GF(2⁸)的非零元素构成乘法循环群。</li>
+</ul>
+<h3 id="2-aes在有限域上的表示">2. AES在有限域上的表示</h3>
+<p>有限域GF(2⁸)上的元素有多种表示方法，为了方便，Rijndaels算法采用多项式表示法，下面是与还表示方法相关的几个定义</p>
+<p><strong>定义1</strong> : 一个由比特位b₇b₆b₅b₄b₃b₂b₁b₀ 组成的字节可表示成系数为(0, 1)的二进制多项式：b₇X⁷ + b₆X⁶ + b₅X⁵ + b₄X⁴ + b₃X³ + b₂X² + b₁X + b₀</p>
+<p>例：字节57＝01010111的多项式表示为: $$x^6 + x^4 + x^2 + x + 1$$</p>
+<p><strong>定义2</strong> : 在GF(2⁸)上的加法定义为二进制多项式的加法，其系数按位模2加。</p>
+<p>例： 57＋83＝D4等价于 $$(x^6+x^4+x^2+x+1)⊕(x^7+x+1)= x^7+x^6+x^4+x^2$$</p>
+<p><strong>定义3</strong> : 在GF(2⁸)上的乘法定义为二进制多项式的乘积模一个次数为8的不可约多项式 $$m(x) = x^8+x^4+x^3+x+1$$</p>
+<p>其系数的十六进制表示为<code>11B</code></p>
+<p>例： 57×83＝C1等价于</p>
+<p>$$(x^6+x^4+x^2+x+1)×(x^7+x+1) \ mod \ m (x) = x^{13 }+ x^{11}+x^9+x^8+x^6+x^5+x^4+x^3+1 \ mod \ x^8+x^4+x^3+x+1 = x^7+x^6+1    $$</p>
+<p><strong>定义4</strong> : 在GF(2⁸)中，二进制多项式b(x)满足乘法逆为式<code>a(x)b(x) mod m(x) = 1</code>的二进制多项式。</p>
+<p><strong>定义5</strong> : 在GF(2⁸)中，倍乘函数xtime(b(x))定义为<code>x·b(x) mod m(x)</code>。具体的运算规则是：把字节B左移一位，若b₇=1， 则减去m(x)，而在GF(2⁸)上加减法等价，即加上m(x)</p>
+<p>例：$$xtime(57)=x(x^6+x^4+x^2+x+1)= x^7+x^5+x^3+x^2+x $$</p>
+<p>$$xtime(83)=x(x^7+x+1)= x^8+x^7+x \ mod \ m(x) = x^7+x^4+x^3+1 \ mod \ m(x) $$</p>
+<h3 id="3-aes的字表示与运算">3. AES的字表示与运算</h3>
+<h4 id="31-字表示">3.1. 字表示</h4>
+<p>AES数据处理的单位是字节和字，一个字由四个字节组成，表示为系数取自GF(2⁸)上的次数低于4次的多项式</p>
+<p>例: 字<code>57 83 4A D1</code>等价于 $$57x^3+83x^2+4Ax+D1$$</p>
+<h4 id="32-字运算">3.2. 字运算</h4>
+<p>字运算是基于上述关于AES在GF(2⁸)中的运算规则的。</p>
+<p><strong>字加法</strong> ： 两多项式系数按位模2加</p>
+<p><strong>字乘法</strong> ： 设a和c是两个字， a(x)和c(x)是其字多项式， AES定义a和c的乘积b为 $$b(x)=a(x)c(x)  \ mod \ x^4+1$$</p>
+<p>如：设a(x)、c(x)和b(x)分别分别如下面（图 2-1）中所示，由b(x) = a(x)c(x) mod x⁴+1得（图 2-1）表达式组</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb1.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb1.png" />
+        </a>
+    </p>
+<p>写成矩阵形式如下面的（图 2-3）所示，x⁴+1是可约多项式，字c(x)不一定有逆，但AES选择的c(x)有逆， $$c(x) =03x^3+01x^2+01x+02$$</p>
+<p>从而使得b(x)的表达式可以使用上面（图 2-4）的矩阵表示，从而使得下面的<code>MixColumns</code>变换变为矩阵的乘法运算。</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb2.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb2.png" />
+        </a>
+    </p>
+<p><strong>字x乘法</strong> ：
+$$p(x)=xb(x)  \ mod \ x^4+1$$  矩阵形式如下图所示，因为模x⁴+1，字x乘法相当于按字节循环移位</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb3.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/nb3.png" />
+        </a>
+    </p>
+<h2 id="三-aes的加密过程">三. AES的加密过程</h2>
+<h3 id="1-状态">1. 状态</h3>
+<p>在AES中除了字节和字外，还有一种被称为状态的数据处理方式，它用来存储加解密过程中的中间数据，一般用以字节为元素的矩阵或二维数组表示。</p>
+<p>如果用Nb代表明密文所含的字数。 Nk代表密钥所含的字数。 Nr代表迭代轮数，则当Nb和Nk都等于4时的状态与密钥数组分别如下面的（图 3-1）和（图 3-2）所示</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/state1.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/state1.png" />
+        </a>
+    </p>
+<p>根据Rijndael算法的定义，加密轮数会针对不同的分组及不同的密钥长度选择不同的数值</p>
+<p>
+        <a data-fancybox="gallery" href="https://github.com/threeworld/encrypt/raw/master/AES/pic/10.png">
+            <img class="mx-auto" alt="img" src="https://github.com/threeworld/encrypt/raw/master/AES/pic/10.png" />
+        </a>
+    </p>
+<h3 id="2-加密过程概述">2. 加密过程概述</h3>
+<p>AES加密算法的主要步骤有</p>
+<ul>
+<li>轮密钥生成</li>
+<li>初始轮密钥加变换：将最初的第一个（Nk个字长）轮密钥亦即主密钥与初始状态进行比特位异或操作</li>
+<li>标准轮（前9, 11 或 13轮）变换：
+<ul>
+<li>S盒变换</li>
+<li>行移位变换</li>
+<li>列混合变换</li>
+<li>轮密钥加变换</li>
+</ul>
+</li>
+<li>最后一轮（第10, 12或14轮）变换
+<ul>
+<li>S盒变换</li>
+<li>行移位变换</li>
+<li>轮密钥加变换</li>
+</ul>
+</li>
+</ul>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/encryption.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/encryption.png" />
+        </a>
+    </p>
+<h3 id="3-aes有限域上的加法">3. AES有限域上的加法</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 有限域GF(2)上的加法，&lt;tt&gt;modeSize&lt;/tt&gt;位的异或操作
+</span><span style="color:#998;font-style:italic"> * xor corresponding byte in two state arrays
+</span><span style="color:#998;font-style:italic"> * @param first first operand
+</span><span style="color:#998;font-style:italic"> * @param second second operand
+</span><span style="color:#998;font-style:italic"> * @return xor result
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">xor</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> first<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> second<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>first<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#458;font-weight:bold">int</span> length <span style="color:#000;font-weight:bold">=</span> first<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> length<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span> j <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> j <span style="color:#000;font-weight:bold">&lt;</span> length<span style="color:#000;font-weight:bold">;</span> j<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+            result<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">(</span>first<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">^</span> second<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="4-轮密钥生成">4. 轮密钥生成</h3>
+<p>轮密钥根据密钥产生算法通过主密钥得到。密钥产生分两步进行：密钥扩展和轮密钥选择，且郡守以下规则</p>
+<ul>
+<li>轮密钥的比特总数为明文数据块长度与轮数加1的积。例如，对于128位的分组长度和10轮迭代，轮密钥长度为128 x (10 + 1) = 1408位，即11个状态长</li>
+<li>首先将用户密钥扩展为一个扩展密钥</li>
+<li>再从扩展密钥中选出轮密钥：第一个轮密钥由扩展中的前Nb个字组成（即原主密钥），第二个轮密钥是接下来的Nb个字，以此类推。</li>
+</ul>
+<h4 id="41-密钥扩展">4.1. 密钥扩展</h4>
+<p>用一个字元素的一维数组<code>W[Nb*(Nr+1)]</code>表示扩展密钥。把密钥放在该数组最开始的Nk个字中，其它的字由它前面的字经过处理后得到。分Nk≤6 和Nk&gt;6两种密钥扩展算法：</p>
+<p><strong>① Nk≤6的密钥扩展</strong></p>
+<ul>
+<li>最前面的Nk个字是由主密钥填充</li>
+<li>之后的每一个字W[j]等于前面的字W[j-1]与Nk个位置之前的字W[j-Nk]的异或</li>
+<li>而且对于Nk的整数倍的位置处的字，在异或之前，对W[j-1]进行Rotl变换和ByteSub变换，再异或一个轮常数Rcon 。</li>
+</ul>
+<p>Rotl是一个字里的字节循环左移函数， 设 W ＝（A， B， C， D） ， 则Rotl(W) ＝ (B， C， D， A)。 轮常数Rcon与Nk无关，且定义为：</p>
+<ul>
+<li>Rcon[i] = (RC [i],‘00’， ‘00’， ‘00’)，</li>
+<li>RC[0] = ‘01’，</li>
+<li>RC[i] = xtime(RC[i-1])</li>
+</ul>
+<p><strong>② Nk&gt;6 的密钥扩展</strong>
+与Nk≤6 的密钥扩展相比， Nk&gt;6 的密钥扩展的不同之处在于：如果j被Nk除的余数＝4，则在异或之前，对W[j-1]进行ByteSub变换。</p>
+<p>增加ByteSub变换，是因为当Nk&gt;6时密钥很长，仅仅对Nk的整数倍的位置处的字进行ByteSub变换，就显得ByteSub变换的密度较稀，安全程度不够强。</p>
+<h4 id="42-轮密钥的选择">4.2. 轮密钥的选择</h4>
+<p>根据分组的大小，依次从扩展密钥中取出轮密钥。前面的Nb个字作为轮密钥0，接下来的Nb个字作为轮密钥1，以此类推</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/keySelection1.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/keySelection1.png" />
+        </a>
+    </p>
+<h4 id="43-代码实现">4.3. 代码实现</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 轮密钥扩展：将1个状态长度的主密钥扩展成&lt;tt&gt;rounds + 1&lt;/tt&gt;个状态长度的轮密钥数组
+</span><span style="color:#998;font-style:italic"> * generation of round keys
+</span><span style="color:#998;font-style:italic"> * @param originalKey original cipher key
+</span><span style="color:#998;font-style:italic"> * @return round keys
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">generateRoundKeys</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> originalKey<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> roundKeys <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>44<span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#458;font-weight:bold">int</span> keyWordCount <span style="color:#000;font-weight:bold">=</span> originalKey<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">// 1. copy the original cipher words into the first four words of the roundKeys
+</span><span style="color:#998;font-style:italic"></span>    System<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">arraycopy</span><span style="color:#000;font-weight:bold">(</span>originalKey<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">,</span> roundKeys<span style="color:#000;font-weight:bold">,</span> 0<span style="color:#000;font-weight:bold">,</span> keyWordCount<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#998;font-style:italic">// 2. extension from previous word
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> keyWordCount<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> keyWordCount <span style="color:#000;font-weight:bold">*</span> 11<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> temp <span style="color:#000;font-weight:bold">=</span> roundKeys<span style="color:#000;font-weight:bold">[</span>i <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">];</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">(</span>i <span style="color:#000;font-weight:bold">%</span> keyWordCount <span style="color:#000;font-weight:bold">==</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            temp <span style="color:#000;font-weight:bold">=</span> xor<span style="color:#000;font-weight:bold">(</span>substituteWord<span style="color:#000;font-weight:bold">(</span>leftShift<span style="color:#000;font-weight:bold">(</span>temp<span style="color:#000;font-weight:bold">)),</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">R_CON</span><span style="color:#000;font-weight:bold">[</span>i <span style="color:#000;font-weight:bold">/</span> keyWordCount<span style="color:#000;font-weight:bold">]);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        roundKeys<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> xor<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">[</span>i <span style="color:#000;font-weight:bold">-</span> keyWordCount<span style="color:#000;font-weight:bold">],</span> temp<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> roundKeys<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="5-aes基本变换">5. AES基本变换</h3>
+<h4 id="51-s盒变换">5.1. S盒变换</h4>
+<p>一种作用在状态中每一个字节上的非线性变换，对比于DES</p>
+<ul>
+<li>因为AES-126明文数据块为16个字节，所以AES使用16个相同的S盒(其实是可重复16次使用同一个)；DES使用8个不相同的S盒。</li>
+<li>AES的S盒有8位输入8位输出，是一种非线性置换；DES的S盒有6位输入4位输出，是一种非线性压缩。</li>
+</ul>
+<p>AES的S盒变换可按以下两步进行：</p>
+<ul>
+<li>将输入字节用其GF(2⁸)上的逆来代替</li>
+<li>对上面的结果作如下的仿射变换：（以x₀－ x₇作输入，以y₀－ y₇作输出）</li>
+</ul>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/sbb.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/sbb.png" />
+        </a>
+    </p>
+<p>需要注意的是：</p>
+<ul>
+<li>S盒变换的第一步是把字节的值用它的乘法逆来代替，是一种非线性变换。</li>
+<li>第二步是仿射运算，是线性变换。</li>
+<li>由于系数矩阵中每列都含有5个1，这说明改变输入中的任意一位，将影响输出中的5位发生变化。</li>
+<li>由于系数矩阵中每行都含有5个1，这说明输出中的每一位，都与输入中的5位相关。</li>
+</ul>
+<p><strong>代码实现</strong>
+通过建表查表代替运算，同时将该操作拆分为<code>substituteState</code>、<code>substituteWord</code>和<code>substituteByte</code>三个子操作</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/subbytes1.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/subbytes1.png" />
+        </a>
+    </p>
+<p>实现S盒最快的方法就是，直接算出S盒的变换结果并造表存储，使用时直接查表（表大小为256个字节）。查表的方法是：取一个字节的高低4位分别作为行号和列号，通过行列号定位到的表中的元素即为新的替代字节。如下图左表中的d4，</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/sbsb.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/sbsb.png" />
+        </a>
+    </p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 状态替代：对状态中的每个字进行字替代
+</span><span style="color:#998;font-style:italic"> * substitute value of a state array using byte as unit
+</span><span style="color:#998;font-style:italic"> * @param state state array to be substituted
+</span><span style="color:#998;font-style:italic"> * @return substitution result, a new state array
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">substituteState</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> state<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> substituteTable<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> state<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> j <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> j <span style="color:#000;font-weight:bold">&lt;</span> 4 <span style="color:#000;font-weight:bold">;</span> j<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+            state<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> substituteByte<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">],</span> substituteTable<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> state<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 字替代：对字中每个字节进行字节替代
+</span><span style="color:#998;font-style:italic"> * substitute all bytes in a word through SBox
+</span><span style="color:#998;font-style:italic"> * @param aWord a word, aka 4 bytes
+</span><span style="color:#998;font-style:italic"> * @return substitution result, a new and disrupted word
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#900;font-weight:bold">substituteWord</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> aWord<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 4<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        aWord<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> substituteByte<span style="color:#000;font-weight:bold">(</span>aWord<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">],</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SUBSTITUTE_BOX</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> aWord<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 字节替代：取一个字的高四位和低四位分别作为S盒的行号和列号，
+</span><span style="color:#998;font-style:italic"> *          通过行列号取S盒中的字节替代原字节
+</span><span style="color:#998;font-style:italic"> * substitute value of a byte through &lt;tt&gt;SBox&lt;/tt&gt;
+</span><span style="color:#998;font-style:italic"> * @param originalByte byte to be substituted
+</span><span style="color:#998;font-style:italic"> * @return substitution result, a new byte
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span> <span style="color:#900;font-weight:bold">substituteByte</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span> originalByte<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> substituteTable<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#998;font-style:italic">// low 4 bits in originByte
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">int</span> low4Bits <span style="color:#000;font-weight:bold">=</span> originalByte <span style="color:#000;font-weight:bold">&amp;</span> 0x000f<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">// high 4 bits in originByte
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">int</span> high4Bits <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">(</span>originalByte <span style="color:#000;font-weight:bold">&gt;&gt;</span> 4<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&amp;</span> 0x000f<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#998;font-style:italic">// obtain value in &lt;tt&gt;AESConstants.SUBSTITUTE_BOX&lt;/tt&gt;
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">return</span> substituteTable<span style="color:#000;font-weight:bold">[</span>high4Bits<span style="color:#000;font-weight:bold">][</span>low4Bits<span style="color:#000;font-weight:bold">];</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="52-行移位变换">5.2. 行移位变换</h4>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/ShiftRows.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/ShiftRows.png" />
+        </a>
+    </p>
+<p>行移位变换对状态的行进行循环移位。第0行不移位，第1行移C₁字节，第2行移C₂字节，第3行移C₃字节。C₁，C₂，C₃按表取值:</p>
+<table>
+<thead>
+<tr>
+<th>Nb</th>
+<th>C1</th>
+<th>C2</th>
+<th>C3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+</tr>
+<tr>
+<td>6</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+</tr>
+<tr>
+<td>8</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<p>行移位变换属于置换，属于线性变换，本质在于把数据打乱、重排，起扩散作用。</p>
+<p><strong>代码实现</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 行移位变换：对状态的行进行循环左移，左移规则在&lt;tt&gt;shiftingTable&lt;/tt&gt;中定义
+</span><span style="color:#998;font-style:italic"> * row shifting operation, rotate over N which is defined in
+</span><span style="color:#998;font-style:italic"> * &lt;tt&gt;AESConstants.SHIFTING_TABLE&lt;/tt&gt; bytes of corresponding rows
+</span><span style="color:#998;font-style:italic"> * @param state state array of the original plaintext
+</span><span style="color:#998;font-style:italic"> * @return a new state array
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#000;font-weight:bold">static</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">shiftRows</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> state<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> shiftingTable<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>state<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> j <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> j <span style="color:#000;font-weight:bold">&lt;</span> 4<span style="color:#000;font-weight:bold">;</span> j<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>  <span style="color:#998;font-style:italic">// local byte in a word
+</span><span style="color:#998;font-style:italic"></span>        <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> state<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>  <span style="color:#998;font-style:italic">// local word
+</span><span style="color:#998;font-style:italic"></span>            result<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> state<span style="color:#000;font-weight:bold">[</span>shiftingTable<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">][</span>j<span style="color:#000;font-weight:bold">]][</span>j<span style="color:#000;font-weight:bold">];</span>
+        <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="53-列混合变换">5.3. 列混合变换</h4>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/mc.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/mc.png" />
+        </a>
+    </p>
+<p>列混合变换把状态的列视为GF(2⁸)上的多项式a(x)，乘以一个固定的多项式c(x)，并模x⁴+1: $$b(x)=a(x)c(x) \ mod \ x^4+1， c(x)=03x^3+01x^2+01x+02$$</p>
+<p>需要注意的是：</p>
+<ul>
+<li>列混合变换属于线性变换，起扩散作用。</li>
+<li>c(x)与x⁴ + 1互素，从而保证c(x)存在逆多项式d(x),而 c(x)d(x) = 1 mod x⁴ + 1 。只有逆多项式d(x)存在，才能正确进行解密</li>
+</ul>
+<p><strong>代码实现</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">72
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">73
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 列混合变换：状态数组与多项式等价矩阵进行有限域GF(2)上的矩阵乘法
+</span><span style="color:#998;font-style:italic"> * @param state 状态数组
+</span><span style="color:#998;font-style:italic"> * @param table 多项式等价矩阵
+</span><span style="color:#998;font-style:italic"> * @return 列混合变换后的新状态
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">mixColumns</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> state<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> table<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>state<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> state<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        result<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> matrixMultiply<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">],</span> table<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 一个字与多项式等价数组在有限域GF(2)上的乘法操作
+</span><span style="color:#998;font-style:italic"> * multiplication between a word of a state and a irreducible
+</span><span style="color:#998;font-style:italic"> * polynomial &lt;tt&gt;C(x)=03x^3+01x^2+01^2+01x+02&lt;/tt&gt; which is replaced as a
+</span><span style="color:#998;font-style:italic"> * constant table &lt;tt&gt;AESConstants.CX&lt;/tt&gt;
+</span><span style="color:#998;font-style:italic"> * (aes-128: 4x4 x 4x1 = 4x1)
+</span><span style="color:#998;font-style:italic"> * @param aWord a word of a state
+</span><span style="color:#998;font-style:italic"> * @return multiplication result, a new word
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> <span style="color:#900;font-weight:bold">matrixMultiply</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> aWord<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> table<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 4<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        result<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> wordMultiply<span style="color:#000;font-weight:bold">(</span>table<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">],</span> aWord<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 两个字在有限域GF(2)上的乘法操作
+</span><span style="color:#998;font-style:italic"> * multiplication between two words
+</span><span style="color:#998;font-style:italic"> * @param firstWord first operand
+</span><span style="color:#998;font-style:italic"> * @param secondWord second operand
+</span><span style="color:#998;font-style:italic"> * @return multiplication result, a byte actually
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span> <span style="color:#900;font-weight:bold">wordMultiply</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> firstWord<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[]</span> secondWord<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span> result <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i<span style="color:#000;font-weight:bold">=</span>0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 4<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        result <span style="color:#000;font-weight:bold">^=</span> multiply<span style="color:#000;font-weight:bold">(</span>firstWord<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">],</span> secondWord<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 有限域GF(2)上的乘法操作，通过分解操作数将之转化成有限域GF(2)上的倍乘操作
+</span><span style="color:#998;font-style:italic"> * multiplication in finite field GF(2^8)
+</span><span style="color:#998;font-style:italic"> * @param a an operand of this kind of multiplication
+</span><span style="color:#998;font-style:italic"> * @param b another operand of this kind of multiplication
+</span><span style="color:#998;font-style:italic"> * @return multiplication result
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span> <span style="color:#900;font-weight:bold">multiply</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span> a<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span> b<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span> temp <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">while</span> <span style="color:#000;font-weight:bold">(</span>b <span style="color:#000;font-weight:bold">!=</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>b <span style="color:#000;font-weight:bold">&amp;</span> 0x01<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">==</span> 1<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            temp <span style="color:#000;font-weight:bold">^=</span> a<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        a <span style="color:#000;font-weight:bold">&lt;&lt;=</span> 1<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">if</span> <span style="color:#000;font-weight:bold">((</span>a <span style="color:#000;font-weight:bold">&amp;</span> 0x100<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">&gt;</span> 0<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#998;font-style:italic">/*
+</span><span style="color:#998;font-style:italic">             judge if a is greater than 0x80, if then subtract a
+</span><span style="color:#998;font-style:italic">             irreducible polynomial which can be substituted by 0x1b
+</span><span style="color:#998;font-style:italic">             cause addition and subtraction are equivalent in this case
+</span><span style="color:#998;font-style:italic">             it&#39;s okay to xor 0x1b
+</span><span style="color:#998;font-style:italic">             */</span>
+            a <span style="color:#000;font-weight:bold">^=</span> 0x1b<span style="color:#000;font-weight:bold">;</span>
+        <span style="color:#000;font-weight:bold">}</span>
+        b <span style="color:#000;font-weight:bold">&gt;&gt;=</span> 1<span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">(</span>temp <span style="color:#000;font-weight:bold">&amp;</span> 0xff<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="6-对外加密接口">6. 对外加密接口</h3>
+<ul>
+<li>将字符串形式的明文和密钥分别转换为N_b个字长的状态和N_k个字长的主密钥数组</li>
+<li>通过主密钥数组生成轮密钥数组</li>
+<li>将二维轮密钥数组转换成三维数组方便以N_k个字长为单位获取轮密钥</li>
+<li>调用coreEncrypt方法，指定S盒运算表，列混合中用到的CX运算表和行变换每个字节的移位规则表</li>
+<li>将最后获取到密文状态用Base64编码</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">encrypt</span><span style="color:#000;font-weight:bold">(</span>String plaintext<span style="color:#000;font-weight:bold">,</span> String key<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#998;font-style:italic">// transfer plaintext and key from one-dimension matrix
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#998;font-style:italic">// to (data.length / 4) x 4 matrix
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> initialPTState <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>transferToShorts<span style="color:#000;font-weight:bold">(</span>plaintext<span style="color:#000;font-weight:bold">));</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> initialKeyState <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>transferToShorts<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">));</span>
+
+    <span style="color:#998;font-style:italic">// obtain raw round keys
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> rawRoundKeys <span style="color:#000;font-weight:bold">=</span> generateRoundKeys<span style="color:#000;font-weight:bold">(</span>initialKeyState<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// make it easier to obtain a whole block of round key in a round transformation
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> roundKeys <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>rawRoundKeys<span style="color:#000;font-weight:bold">);</span>
+    
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> finalState <span style="color:#000;font-weight:bold">=</span> coreEncrypt<span style="color:#000;font-weight:bold">(</span>initialPTState<span style="color:#000;font-weight:bold">,</span> roundKeys<span style="color:#000;font-weight:bold">,</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SUBSTITUTE_BOX</span><span style="color:#000;font-weight:bold">,</span>
+                                       AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">CX</span><span style="color:#000;font-weight:bold">,</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">SHIFTING_TABLE</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> Base64Util<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">encode</span><span style="color:#000;font-weight:bold">(</span>transfer2Bytes<span style="color:#000;font-weight:bold">(</span>finalState<span style="color:#000;font-weight:bold">));</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="7-核心加密逻辑">7. 核心加密逻辑</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * AES核心操作，通过将可逆操作抽取成可逆矩阵作为参数，使该方法能在加/解密操作中复用
+</span><span style="color:#998;font-style:italic"> * @param initialPTState    明文或密文的状态数组
+</span><span style="color:#998;font-style:italic"> * @param roundKeys     加/解密要用到的轮密钥数组
+</span><span style="color:#998;font-style:italic"> * @param substituteTable   加/解密要用到的S盒
+</span><span style="color:#998;font-style:italic"> * @param mixColumnTable    列混合中用来取代既约多项式的数组
+</span><span style="color:#998;font-style:italic"> * @param shiftingTable    行变换中用来决定字间左移的位数的数组
+</span><span style="color:#998;font-style:italic"> * @return 加/解密结果
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">coreEncrypt</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> initialPTState<span style="color:#000;font-weight:bold">,</span>
+                              <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> roundKeys<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> substituteTable<span style="color:#000;font-weight:bold">,</span>
+                              <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> mixColumnTable<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> shiftingTable<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+
+    <span style="color:#998;font-style:italic">// 初始轮密钥加，异或操作
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> state <span style="color:#000;font-weight:bold">=</span> xor<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">[</span>0<span style="color:#000;font-weight:bold">],</span> initialPTState<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// 处理前九轮变换
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> 9<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#998;font-style:italic">// 将状态数组的字节替换为S盒中相应位置的字节
+</span><span style="color:#998;font-style:italic"></span>        state <span style="color:#000;font-weight:bold">=</span> substituteState<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">,</span> substituteTable<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// 行移位变换
+</span><span style="color:#998;font-style:italic"></span>        state <span style="color:#000;font-weight:bold">=</span> shiftRows<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">,</span> shiftingTable<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// 列混合变换
+</span><span style="color:#998;font-style:italic"></span>        state <span style="color:#000;font-weight:bold">=</span> mixColumns<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">,</span> mixColumnTable<span style="color:#000;font-weight:bold">);</span>
+        <span style="color:#998;font-style:italic">// 轮密钥加变换
+</span><span style="color:#998;font-style:italic"></span>        state <span style="color:#000;font-weight:bold">=</span> xor<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">[</span>i <span style="color:#000;font-weight:bold">+</span> 1<span style="color:#000;font-weight:bold">],</span> state<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#998;font-style:italic">// 处理最后一轮
+</span><span style="color:#998;font-style:italic"></span>    state <span style="color:#000;font-weight:bold">=</span> substituteState<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">,</span> substituteTable<span style="color:#000;font-weight:bold">);</span>
+    state <span style="color:#000;font-weight:bold">=</span> shiftRows<span style="color:#000;font-weight:bold">(</span>state<span style="color:#000;font-weight:bold">,</span> shiftingTable<span style="color:#000;font-weight:bold">);</span>
+    state <span style="color:#000;font-weight:bold">=</span> xor<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">[</span>roundKeys<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">],</span> state<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> state<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="四-解密过程">四. 解密过程</h2>
+<p>说到加密先纵观整个AES的加解密流程，由于Rijndael算法不是对合运算，所以其解密算法与加密算法不同，根据解密算法应当是加密算法的逆，最直接的做法就是把加密算法倒序执行，便得到解密算法，但是这样不便于工程实现。</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/big.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/big.png" />
+        </a>
+    </p>
+<p>由于Rijndael算法的巧妙设计，使得我们只需稍微改变密钥扩展策略，同时把加密算法的基本运变换成逆变换，便得到解密算法，其算法结构其实与加密算法的结构相同。</p>
+<h3 id="1-aes基本逆变换">1. AES基本逆变换</h3>
+<h4 id="11-addroundkey">1.1. AddRoundKey</h4>
+<p>轮密钥加变换的逆就是其本身，即
+$$ (AddRoundKey)^{-1}= AddRoundKey $$</p>
+<h4 id="12-shiftrows">1.2. ShiftRows</h4>
+<p>行移位变换的逆是状态的后三行分别移位N_b - C₁， N_b - C₂， N_b - C₃个字节。</p>
+<h4 id="13-mixcolumns">1.3. MixColumns</h4>
+<p>因为列混合变换是把状态的每一列都乘以一个固定的多项式c(x):
+$$b(x)=a(x)c(x) \ mod \ x^4+1 $$
+所以列混合变换的逆就是状态的每列都乘以c(x)的逆多项式d(x)：
+$$d(x)=(c(x) )^{-1} \ mod \ x^4+1 ，c(x)=03x^3+01x^2+01x+02，d(x)=0Bx^3+0Dx^2+09x+0E $$</p>
+<h4 id="14-subbytes">1.4. SubBytes</h4>
+<p>S盒变换的逆要先进行逆仿射变换，再把每个字节用其在GF(2⁸)中的逆来代替。</p>
+<p>
+        <a data-fancybox="gallery" href="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/inversesb.png">
+            <img class="mx-auto" alt="img" src="https://raw.githubusercontent.com/cszxyang/cipher4j/master/imgs/aes/inversesb.png" />
+        </a>
+    </p>
+<h4 id="15-keyexpansion">1.5. KeyExpansion</h4>
+<p>解密的密钥扩展与加密的密钥扩展不同，其定义如下：</p>
+<ul>
+<li>使用加密算法的密钥扩展</li>
+<li>把InvMixColumn应用到除第一和最后一轮外的所有轮密钥上</li>
+</ul>
+<p>另外得到的逆轮密钥数组在轮变换中需要倒序使用，即Round₁使用roundKey_(Nr+1)</p>
+<h3 id="2-对外的解密接口">2. 对外的解密接口</h3>
+<ul>
+<li>使用Base64编码将密文解码并得到初始状态，获取密钥数组</li>
+<li>调用私有的核心解密函数得到解密后的明文状态</li>
+<li>将明文状态还原为字符串（不考虑中文编码）</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#000;font-weight:bold">public</span> String <span style="color:#900;font-weight:bold">decrypt</span><span style="color:#000;font-weight:bold">(</span>String encryptedText<span style="color:#000;font-weight:bold">,</span> String key<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> initialTextState <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>Base64Util<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">decodeToShorts</span><span style="color:#000;font-weight:bold">(</span>encryptedText<span style="color:#000;font-weight:bold">));</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> initialKeyState <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>transferToShorts<span style="color:#000;font-weight:bold">(</span>key<span style="color:#000;font-weight:bold">));</span>
+
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> decryptState <span style="color:#000;font-weight:bold">=</span> coreDecrypt<span style="color:#000;font-weight:bold">(</span>initialTextState<span style="color:#000;font-weight:bold">,</span> initialKeyState<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> getOrigin<span style="color:#000;font-weight:bold">(</span>decryptState<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="3-核心解密逻辑">3. 核心解密逻辑</h3>
+<p>获取加密轮密钥逆变换数组，复用核心加密函数即可，主要差别在于逆变换，大体步骤如下</p>
+<ul>
+<li>使用加密算法的密钥扩展得到轮密钥数组，并对之进行维数处理</li>
+<li>对中间N_r-1个密钥进行逆列混合变换</li>
+<li>为了便于操作将上述步骤得到的解密轮密钥数组逆转，这样便可通过改变参数复用加密算法的结构</li>
+</ul>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * 解密逻辑：通过将可逆操作抽取成可逆矩阵, 复用加密核心函数
+</span><span style="color:#998;font-style:italic"> * @param encryptedTextState initial encrypted text state
+</span><span style="color:#998;font-style:italic"> * @param keyState initial key state
+</span><span style="color:#998;font-style:italic"> * @return decrypted state
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> <span style="color:#900;font-weight:bold">coreDecrypt</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> encryptedTextState<span style="color:#000;font-weight:bold">,</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> keyState<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#998;font-style:italic">// obtain raw round keys
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][]</span> rawRoundKeys <span style="color:#000;font-weight:bold">=</span> generateRoundKeys<span style="color:#000;font-weight:bold">(</span>keyState<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// make it easier to obtain a whole block of round key in a round transformation
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> roundKeys <span style="color:#000;font-weight:bold">=</span> transfer<span style="color:#000;font-weight:bold">(</span>rawRoundKeys<span style="color:#000;font-weight:bold">);</span>
+
+    <span style="color:#998;font-style:italic">// 对中间9个密钥进行逆列混合变换
+</span><span style="color:#998;font-style:italic"></span>    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 1<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> roundKeys<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span> <span style="color:#000;font-weight:bold">-</span> 1<span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        roundKeys<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> mixColumns<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">],</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INVERSE_CX</span><span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">}</span>
+
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> inverseRoundKeys <span style="color:#000;font-weight:bold">=</span> inverseRoundKeys<span style="color:#000;font-weight:bold">(</span>roundKeys<span style="color:#000;font-weight:bold">);</span>
+    <span style="color:#000;font-weight:bold">return</span> coreEncrypt<span style="color:#000;font-weight:bold">(</span>encryptedTextState<span style="color:#000;font-weight:bold">,</span> inverseRoundKeys<span style="color:#000;font-weight:bold">,</span> AESConstants<span style="color:#000;font-weight:bold">.</span>
+                       INVERSE_SUBSTITUTE_BOX<span style="color:#000;font-weight:bold">,</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INVERSE_CX</span><span style="color:#000;font-weight:bold">,</span> AESConstants<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">INVERSE_SHIFTING_TABLE</span><span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+
+<span style="color:#998;font-style:italic">/**
+</span><span style="color:#998;font-style:italic"> * [解密] 将解密扩展密钥数组逆转，方便复用核心加密操作，
+</span><span style="color:#998;font-style:italic"> * @param roundKeys 解密扩展密钥数组
+</span><span style="color:#998;font-style:italic"> * @return 逆转了的解密扩展密钥数组
+</span><span style="color:#998;font-style:italic"> */</span>
+<span style="color:#000;font-weight:bold">private</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> <span style="color:#900;font-weight:bold">inverseRoundKeys</span><span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> roundKeys<span style="color:#000;font-weight:bold">)</span> <span style="color:#000;font-weight:bold">{</span>
+    <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[][][]</span> result <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> <span style="color:#458;font-weight:bold">short</span><span style="color:#000;font-weight:bold">[</span>roundKeys<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">][</span>4<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#458;font-weight:bold">int</span> length <span style="color:#000;font-weight:bold">=</span> roundKeys<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span>
+    <span style="color:#000;font-weight:bold">for</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#458;font-weight:bold">int</span> i <span style="color:#000;font-weight:bold">=</span> 0<span style="color:#000;font-weight:bold">;</span> i <span style="color:#000;font-weight:bold">&lt;</span> roundKeys<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">length</span><span style="color:#000;font-weight:bold">;</span> i<span style="color:#000;font-weight:bold">++)</span> <span style="color:#000;font-weight:bold">{</span>
+        result<span style="color:#000;font-weight:bold">[</span>i<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">=</span> roundKeys<span style="color:#000;font-weight:bold">[</span>length <span style="color:#000;font-weight:bold">-</span> 1 <span style="color:#000;font-weight:bold">-</span> i<span style="color:#000;font-weight:bold">];</span>
+    <span style="color:#000;font-weight:bold">}</span>
+    <span style="color:#000;font-weight:bold">return</span> result<span style="color:#000;font-weight:bold">;</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="五-测试">五. 测试</h2>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#3c5d5d;font-weight:bold">@Test</span>
+<span style="color:#000;font-weight:bold">public</span> <span style="color:#458;font-weight:bold">void</span> <span style="color:#900;font-weight:bold">testAES</span><span style="color:#000;font-weight:bold">()</span> <span style="color:#000;font-weight:bold">throws</span> UnsupportedEncodingException <span style="color:#000;font-weight:bold">{</span>
+    String plaintext <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#34;passwordTextCase&#34;</span><span style="color:#000;font-weight:bold">,</span> key <span style="color:#000;font-weight:bold">=</span> <span style="color:#d14">&#34;simpleKeyCase123&#34;</span><span style="color:#000;font-weight:bold">;</span>
+    CipherService aesService <span style="color:#000;font-weight:bold">=</span> <span style="color:#000;font-weight:bold">new</span> AESCipherService<span style="color:#000;font-weight:bold">();</span>
+    String encryptedText <span style="color:#000;font-weight:bold">=</span> aesService<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">encrypt</span><span style="color:#000;font-weight:bold">(</span>plaintext<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">);</span>
+
+    ArrayUtil<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">printInfo</span><span style="color:#000;font-weight:bold">(</span><span style="color:#d14">&#34;encrypted text&#34;</span><span style="color:#000;font-weight:bold">,</span> encryptedText<span style="color:#000;font-weight:bold">,</span> <span style="color:#000;font-weight:bold">false</span><span style="color:#000;font-weight:bold">);</span>
+    aesService<span style="color:#000;font-weight:bold">.</span><span style="color:#008080">decrypt</span><span style="color:#000;font-weight:bold">(</span>encryptedText<span style="color:#000;font-weight:bold">,</span> key<span style="color:#000;font-weight:bold">);</span>
+<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="1-加密结果">1. 加密结果</h3>
+<pre><code>#####################  encryption  #####################
+plaintext text                passwordTextCase              
+key text                      simpleKeyCase123              
+initial plaintext state       70617373776f72645465787443617365
+initial key state             73696d706c654b657943617365313233
+
+RoundKeys
+[RoundKey 1]                  73696d706c654b657943617365313233
+[RoundKey 2]                  b54aae3dd92fe558a06c842bc55db618
+[RoundKey 3]                  fb04039b222be6c3824762e8471ad4f0
+[RoundKey 4]                  5d4c8f3b7f6769f8fd200b10ba3adfe0
+[RoundKey 5]                  d5d26ecfaab5073757950c27edafd3c7
+[RoundKey 6]                  bcb4a89a1601afad4194a38aac3b704d
+[RoundKey 7]                  7ee54b0b68e4e4a62970472c854b3761
+[RoundKey 8]                  8d7fa49ce59b403acceb071649a03077
+[RoundKey 9]                  ed7b51a708e0119dc40b168b8dab26fc
+[RoundKey 10]                 948ce1fa9c6cf0675867e6ecd5ccc010
+[RoundKey 11]                 e9362bf9755adb9e2d3d3d72f8f1fd62
+
+N = 1
+SubBytes                      7b30727baf67127cd8f7d4c5f75383b1
+ShiftRows                     7b67d4b1aff7837bd853727cf73012c5
+MixColumns                    3a636747bfbfc8685094ebaa7264b7b1
+RoundKey                      b54aae3dd92fe558a06c842bc55db618
+AddRoundKeys                  8f29c97a66902d30f0f86f81b73901a9
+
+N = 2
+SubBytes                      73a5ddda3360d8048c41a80ca9127cd3
+ShiftRows                     7360a8d333417cda8c12dd04a9a5d80c
+MixColumns                    3d8336e003efffc7ecd033486987b385
+RoundKey                      fb04039b222be6c3824762e8471ad4f0
+AddRoundKeys                  c687357b21c419046e9751a02e9d6775
+
+N = 3
+SubBytes                      b4179621fd1cd4f29f88d1e0315e859d
+ShiftRows                     b41cd19dfd8885219f5e96f23117d4e0
+MixColumns                    1b79ad2bc6430753a370fb8d6f98ae4b
+RoundKey                      5d4c8f3b7f6769f8fd200b10ba3adfe0
+AddRoundKeys                  46352210b9246eab5e50f09dd5a271ab
+
+N = 4
+SubBytes                      5a9693ca56369f6258538c5e033aa362
+ShiftRows                     5a368c625653a3ca583a936203969f5e
+MixColumns                    00dbc99030c41d850fe0f98566d052b0
+RoundKey                      d5d26ecfaab5073757950c27edafd3c7
+AddRoundKeys                  d509a75f9a711ab25875f5a28b7f8177
+
+N = 5
+SubBytes                      03015ccfb8a3a2376a9de63a3dd20cf5
+ShiftRows                     03a3e6f5b89d0ccf6ad25c373d01a23a
+MixColumns                    eb9a73b1144277c7d206595ee1f82d90
+RoundKey                      bcb4a89a1601afad4194a38aac3b704d
+AddRoundKeys                  572edb2b0243d86a9392fad44dc35ddd
+
+N = 6
+SubBytes                      5b31b9f1771a6102dc4f2d48e32e4cc1
+ShiftRows                     5b1a2dc1774f4cf1dc2eb902e3316148
+MixColumns                    74d9434382cca8636a529deca76ac8fe
+RoundKey                      7ee54b0b68e4e4a62970472c854b3761
+AddRoundKeys                  0a3c0848ea284cc54322dac02221ff9f
+
+N = 7
+SubBytes                      67eb3052873429a61a9357ba93fd16db
+ShiftRows                     673457db879316521afd30a693eb29ba
+MixColumns                    1e2d8b67ffd2ceb3be0d76b4889fff03
+RoundKey                      8d7fa49ce59b403acceb071649a03077
+AddRoundKeys                  93522ffb1a498e8972e671a2c13fcf74
+
+N = 8
+SubBytes                      dc00150fa23b19a7408ea33a78758a92
+ShiftRows                     dc3ba392a28e8a0f407515a77800193a
+MixColumns                    dfc617d8532f32e7ad32edf5d36904e5
+RoundKey                      ed7b51a708e0119dc40b168b8dab26fc
+AddRoundKeys                  32bd467f5bcf237a6939fb7e5ec22219
+
+N = 9
+SubBytes                      237a5ad2398a26daf9120ff3582593d4
+ShiftRows                     238a0fd4391293d2f9255ada587a26f3
+MixColumns                    18e9d05305617b7506871dc0eb356049
+RoundKey                      948ce1fa9c6cf0675867e6ecd5ccc010
+AddRoundKeys                  8c6531a9990d8b125ee0fb2c3ef9a059
+
+N = 10
+SubBytes                      644dc7d3eed73dc958e10f71b299e0cb
+ShiftRows                     64d70fcbeee1e0d35899c7c9b24d3d71
+RoundKey                      e9362bf9755adb9e2d3d3d72f8f1fd62
+AddRoundKeys                  8de124329bbb3b4d75a4fabb4abcc013
+encrypted text                jeEkMpu7O011pPq7SrzAEw==      
+</code></pre><h3 id="2-解密结果">2. 解密结果</h3>
+<pre><code>#####################  decryption  #####################
+encrypted text                jeEkMpu7O011pPq7SrzAEw==      
+key text                      simpleKeyCase123              
+initial encrypted state       8de124329bbb3b4d75a4fabb4abcc013
+initial key state             73696d706c654b657943617365313233
+
+RoundKeys
+[RoundKey 1]                  73696d706c654b657943617365313233
+[RoundKey 2]                  b54aae3dd92fe558a06c842bc55db618
+[RoundKey 3]                  fb04039b222be6c3824762e8471ad4f0
+[RoundKey 4]                  5d4c8f3b7f6769f8fd200b10ba3adfe0
+[RoundKey 5]                  d5d26ecfaab5073757950c27edafd3c7
+[RoundKey 6]                  bcb4a89a1601afad4194a38aac3b704d
+[RoundKey 7]                  7ee54b0b68e4e4a62970472c854b3761
+[RoundKey 8]                  8d7fa49ce59b403acceb071649a03077
+[RoundKey 9]                  ed7b51a708e0119dc40b168b8dab26fc
+[RoundKey 10]                 948ce1fa9c6cf0675867e6ecd5ccc010
+[RoundKey 11]                 e9362bf9755adb9e2d3d3d72f8f1fd62
+
+inverse roundKeys
+[RoundKey 1]                  e9362bf9755adb9e2d3d3d72f8f1fd62
+[RoundKey 2]                  708e03febe111cd46ee2ba036852f407
+[RoundKey 3]                  513f2d23ce9f1f2ad0f3a6d706b04e04
+[RoundKey 4]                  16b3b0df9fa032091e6cb9fdd643e8d3
+[RoundKey 5]                  de6e462d891382d681cc8bf4c82f512e
+[RoundKey 6]                  0dc56d9f577dc4fb08df092249e3dada
+[RoundKey 7]                  e0240c6e5ab8a9645fa2cdd9413cd3f8
+[RoundKey 8]                  e0ec63caba9ca50a051a64bd1e9e1e21
+[RoundKey 9]                  a13297635a70c6c0bf86c1b71b847a9c
+[RoundKey 10]                 1d7fded0fb4251a3e5f60777a402bb2b
+[RoundKey 11]                 73696d706c654b657943617365313233
+
+N = 1
+SubBytes                      8c0dfb5999e0a0a95ef931123e658b2c
+ShiftRows                     8c6531a9990d8b125ee0fb2c3ef9a059
+MixColumns                    53040c2a87038f0697c7e0d93028d2f4
+RoundKey                      708e03febe111cd46ee2ba036852f407
+AddRoundKeys                  238a0fd4391293d2f9255ada587a26f3
+
+N = 2
+SubBytes                      32cffb195b39227f69c2467a5ebd237e
+ShiftRows                     32bd467f5bcf237a6939fb7e5ec22219
+MixColumns                    8d048eb16c1195259086b3707eb0573e
+RoundKey                      513f2d23ce9f1f2ad0f3a6d706b04e04
+AddRoundKeys                  dc3ba392a28e8a0f407515a77800193a
+
+N = 3
+SubBytes                      934971741ae6cffb723f2f89c1528ea2
+ShiftRows                     93522ffb1a498e8972e671a2c13fcf74
+MixColumns                    7187e7041833245b0491895b45a8c169
+RoundKey                      16b3b0df9fa032091e6cb9fdd643e8d3
+AddRoundKeys                  673457db879316521afd30a693eb29ba
+
+N = 4
+SubBytes                      0a28da9fea22ff48432108c5223c4cc0
+ShiftRows                     0a3c0848ea284cc54322dac02221ff9f
+MixColumns                    85746becfe5cce275de232f62b1e3066
+RoundKey                      de6e462d891382d681cc8bf4c82f512e
+AddRoundKeys                  5b1a2dc1774f4cf1dc2eb902e3316148
+
+N = 5
+SubBytes                      5743fadd02925d2b93c3db6a4d2ed8d4
+ShiftRows                     572edb2b0243d86a9392fad44dc35ddd
+MixColumns                    0e668b6aefe0c834620d551574e278e0
+RoundKey                      0dc56d9f577dc4fb08df092249e3dada
+AddRoundKeys                  03a3e6f5b89d0ccf6ad25c373d01a23a
+
+N = 6
+SubBytes                      d571f5779a75815f587fa7b28b091aa2
+ShiftRows                     d509a75f9a711ab25875f5a28b7f8177
+MixColumns                    ba12800c0ceb0aae07985ebb42aa4ca6
+RoundKey                      e0240c6e5ab8a9645fa2cdd9413cd3f8
+AddRoundKeys                  5a368c625653a3ca583a936203969f5e
+
+N = 7
+SubBytes                      4624f0abb95071105ea222abd5356e9d
+ShiftRows                     46352210b9246eab5e50f09dd5a271ab
+MixColumns                    54f0b2574714202b9a44f24f2f89cac1
+RoundKey                      e0ec63caba9ca50a051a64bd1e9e1e21
+AddRoundKeys                  b41cd19dfd8885219f5e96f23117d4e0
+
+N = 8
+SubBytes                      c6c451752197677b6e9d35042e8719a0
+ShiftRows                     c687357b21c419046e9751a02e9d6775
+MixColumns                    d2523fb06931ba1a33941cb3b221a290
+RoundKey                      a13297635a70c6c0bf86c1b71b847a9c
+AddRoundKeys                  7360a8d333417cda8c12dd04a9a5d80c
+
+N = 9
+SubBytes                      8f906fa966f8017af039c930b7292d81
+ShiftRows                     8f29c97a66902d30f0f86f81b73901a9
+MixColumns                    66180a6154b5d2d83da5750b5332a9ee
+RoundKey                      1d7fded0fb4251a3e5f60777a402bb2b
+AddRoundKeys                  7b67d4b1aff7837bd853727cf73012c5
+
+N = 10
+SubBytes                      030a19561b2641032d501e0126083907
+ShiftRows                     03081e031b0a39012d26190726504156
+RoundKey                      73696d706c654b657943617365313233
+AddRoundKeys                  70617373776f72645465787443617365
+plaintext                     passwordTextCase  
+</code></pre><h2 id="六-说明">六. 说明</h2>
+<h3 id="1-源码">1. 源码</h3>
+<p>本AES实现的代码已经发布到<a href="https://github.com/cszxyang/cipher4j">Github</a>，如果你觉得写得还不错，欢迎star和fork; 如果对代码有疑惑，欢迎通过邮箱<code>linfengit@qq.com</code>与我讨论</p>
+<h3 id="2-todo">2. TODO</h3>
+<ul>
+<li>本例子以AES-128为例，明文小于128位应该进行填充; 大于128位应该进行分组，待加密完成后进行密文的合并</li>
+<li>没有就数据编码进行扩展，暂不支持中文数据加密</li>
+<li>实现的是最简单的电码本（ECB）工作模式，暂不支持其他模式明文数据模式</li>
+</ul>
+<h2 id="七-参考">七. 参考</h2>
+<ul>
+<li><a href="https://www.baidu.com/link?url=QhLf4SboJVjBsfe1JGiOB6nzvzmo0xZ0QU_Mxoft1fB6bJK_H8o2ffPXMY4-cv-W&amp;wd=&amp;eqid=bea9a25000020bc8000000065bc6115b">FIPS 197 – Advanced Encryption Standard</a></li>
+<li><a href="http://www.formaestudio.com/rijndaelinspector/">动画演示AES运行过程</a></li>
+<li>《密码学引论》（第三版，张焕国、唐明编著，武汉大学出版社）</li>
+</ul>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2018-10-09-impl-of-des/" style="color: #0969da">DES 加密算法实现</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/java'>Java</a></li>
+                
+                <li><a href='/tags/%E5%AF%86%E7%A0%81%E5%AD%A6'>密码学</a></li>
+                
+                <li><a href='/tags/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8'>信息安全</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2025 <a href="http://cszxyang.cn/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

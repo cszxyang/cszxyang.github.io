@@ -72,6 +72,24 @@
     </item>
     
     <item>
+      <title>AES 加密算法实现</title>
+      <link>http://cszxyang.cn/post/2018-10-18-impl-of-aes/</link>
+      <pubDate>Thu, 18 Oct 2018 17:35:12 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/post/2018-10-18-impl-of-aes/</guid>
+      <description>&lt;p&gt;上次实现了 DES 加密算法，接下来继续深入同为对称加密算法并广为应用的 AES 算法。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>DES 加密算法实现</title>
+      <link>http://cszxyang.cn/post/2018-10-09-impl-of-des/</link>
+      <pubDate>Tue, 09 Oct 2018 22:54:24 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/post/2018-10-09-impl-of-des/</guid>
+      <description>&lt;p&gt;最近在学校学习密码学相关的课程，其中讲到了一些加密算法，教大家这些算法的工作原理，我觉得比较有意思，就抽空的时候尝试自己去写代码实现一下，以此记录。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
       <title>归档</title>
       <link>http://cszxyang.cn/archives/</link>
       <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
