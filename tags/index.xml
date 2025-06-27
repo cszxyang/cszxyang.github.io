@@ -6,7 +6,25 @@
     <description>Recent content in Tags on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/tags/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Wed, 16 Apr 2025 19:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Redis</title>
+      <link>http://cszxyang.cn/tags/redis/</link>
+      <pubDate>Wed, 16 Apr 2025 19:54:24 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/tags/redis/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>技术</title>
+      <link>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</link>
+      <pubDate>Wed, 16 Apr 2025 19:54:24 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</guid>
+      <description></description>
+    </item>
+    
     <item>
       <title>hashmap</title>
       <link>http://cszxyang.cn/tags/hashmap/</link>
@@ -31,15 +49,6 @@
       <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
       
       <guid>http://cszxyang.cn/tags/%E5%B9%B6%E5%8F%91/</guid>
-      <description></description>
-    </item>
-    
-    <item>
-      <title>技术</title>
-      <link>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</link>
-      <pubDate>Thu, 03 Jun 2021 10:54:24 +0200</pubDate>
-      
-      <guid>http://cszxyang.cn/tags/%E6%8A%80%E6%9C%AF/</guid>
       <description></description>
     </item>
     

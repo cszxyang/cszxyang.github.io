@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Redis on cszxyang</title>
+    <link>http://cszxyang.cn/tags/redis/</link>
+    <description>Recent content in Redis on cszxyang</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Wed, 16 Apr 2025 19:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/tags/redis/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Redis 集群模式搭建</title>
+      <link>http://cszxyang.cn/post/2025-04-16-redis-cluster-modes/</link>
+      <pubDate>Wed, 16 Apr 2025 19:54:24 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/post/2025-04-16-redis-cluster-modes/</guid>
+      <description>&lt;p&gt;最近有空，做一些关于 Redis 集群部署的实验，以此记录。&lt;/p&gt;</description>
+    </item>
+    
+  </channel>
+</rss>

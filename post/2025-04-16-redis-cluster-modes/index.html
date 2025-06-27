@@ -1,0 +1,2326 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+
+    <title>Redis 集群模式搭建 | cszxyang</title>
+    <meta property="og:title" content="Redis 集群模式搭建 - cszxyang">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content='2025-04-16T19:54:24&#43;08:00'>
+        
+        
+    <meta property="article:modified_time" content='2025-04-16T19:54:24&#43;08:00'>
+        
+    <meta name="Keywords" content="">
+    <meta name="description" content="Redis 集群模式搭建">
+        
+    <meta name="author" content="">
+    <meta property="og:url" content="http://cszxyang.cn/post/2025-04-16-redis-cluster-modes/">
+    <link rel="shortcut icon" href='/favicon.ico'  type="image/x-icon">
+
+    <link rel="stylesheet" href='/css/normalize.css'>
+    <link rel="stylesheet" href='/css/style.css'>
+    <script type="text/javascript" src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+    
+    
+    
+        <link href="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.css" rel="stylesheet">
+    
+    
+    
+    
+</head>
+
+
+<body>
+    <header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="http://cszxyang.cn/">
+                        cszxyang
+                    </a>
+                
+                
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="current" href="http://cszxyang.cn/">首页</a>
+                    
+                    <a  href="http://cszxyang.cn/categories/" title="分类">分类</a>
+                    
+                    <a  href="http://cszxyang.cn/tags/" title="标签">标签</a>
+                    
+                    <a  href="http://cszxyang.cn/archives/" title="归档">归档</a>
+                    
+                    <a  href="http://cszxyang.cn/about/" title="关于">关于</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+    <div id="body">
+        <div class="container">
+            <div class="col-group">
+
+                
+                <div class="col-10" id="main">
+                    
+<div class="res-cons">
+    
+    <article class="post">
+        <header>
+            <h1 class="post-title">Redis 集群模式搭建</h1>
+        </header>
+        <date class="post-meta meta-date">
+            2025年4月16日
+        </date>
+        
+        <div class="post-meta">
+            <span>|</span>
+            
+            <span class="meta-category"><a href='/categories/%E6%8A%80%E6%9C%AF'>技术</a></span>
+            
+        </div>
+        
+        
+        <div class="post-meta">
+            <span id="busuanzi_container_page_pv">|<span id="busuanzi_value_page_pv"></span><span>
+                    阅读</span></span>
+        </div>
+        
+        
+        <div class="post-content">
+            <p>最近有空，做一些关于 Redis 集群部署的实验，以此记录。</p>
+<p>Redis 的集群部署主要有以下三种模式，每种模式适用于不同的场景。以下是详细说明及基于 Docker 的部署实践指南：</p>
+<h1 id="一redis-集群部署模式对比">一、Redis 集群部署模式对比</h1>
+<table>
+<thead>
+<tr>
+<th><strong>模式</strong></th>
+<th><strong>主从复制</strong></th>
+<th><strong>Sentinel 哨兵</strong></th>
+<th><strong>Cluster 分片集群</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>核心功能</strong></td>
+<td>数据冗余、读写分离</td>
+<td>主从复制 + 自动故障转移</td>
+<td>数据分片 + 高可用 + 自动扩容</td>
+</tr>
+<tr>
+<td><strong>数据一致性</strong></td>
+<td>异步复制（可能丢数据）</td>
+<td>异步复制</td>
+<td>异步复制，哈希槽分区</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>读多写少，容灾备份</td>
+<td>高可用场景（主节点自动切换）</td>
+<td>大数据量、高并发、横向扩展</td>
+</tr>
+<tr>
+<td><strong>节点数量</strong></td>
+<td>至少 1 主 + 1 从</td>
+<td>至少 1 主 + 1 从 + 3 Sentinel</td>
+<td>至少 3 主 + 3 从（6 节点）</td>
+</tr>
+<tr>
+<td><strong>客户端兼容性</strong></td>
+<td>需手动切换主节点</td>
+<td>客户端需支持 Sentinel 协议</td>
+<td>需支持 Cluster 协议</td>
+</tr>
+</tbody>
+</table>
+<h1 id="二docker-部署三种集群模式">二、Docker 部署三种集群模式</h1>
+<p>以下使用 <code>docker-compose.yml</code> 快速搭建环境（需提前安装 Docker 和 <code>docker-compose</code>）。</p>
+<h2 id="1-主从复制模式-replication">1. 主从复制模式 (Replication)</h2>
+<ul>
+<li><strong>生产节点数</strong>：1 主 + 2 从（提升读性能和容灾能力）</li>
+<li><strong>适用场景</strong>：读多写少、数据冷备</li>
+</ul>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751030899482-972cfb1c-5bff-4950-9402-3df62c9a3f3f.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751030899482-972cfb1c-5bff-4950-9402-3df62c9a3f3f.png" />
+        </a>
+    </p>
+<h3 id="文件目录">文件目录</h3>
+<p>创建测试目录 <code>master-slave-mode</code>，文件树如下：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">master-slave-mode/
+├── docker-compose.yml
+├── data/
+    ├── master/
+    ├── slave1/
+    └── slave2/
+</code></pre></td></tr></table>
+</div>
+</div><p>创建数据目录：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">mkdir -p data/<span style="color:#000;font-weight:bold">{</span>master,slave1,slave2<span style="color:#000;font-weight:bold">}</span>
+<span style="color:#998;font-style:italic"># 或使用更精细的权限控制</span>
+chmod -R <span style="color:#099">777</span> data/*
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="docker-compose-配置">docker compose 配置</h3>
+<p>写入下述 <code>docker-compose.yml</code><strong>配置</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-master</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --requirepass 123456<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb"> </span>[<span style="color:#d14">&#34;6379:6379&#34;</span>]<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb"> </span>[<span style="color:#d14">&#34;./data/master:/data&#34;</span>]<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-slave1</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --replicaof redis-master 6379 --requirepass 123456 --masterauth 123456<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb"> </span>[redis-master]<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb"> </span>[<span style="color:#d14">&#34;./data/slave1:/data&#34;</span>]<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-slave2</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --replicaof redis-master 6379 --requirepass 123456 --masterauth 123456<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb"> </span>[redis-master]<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb"> </span>[<span style="color:#d14">&#34;./data/slave2:/data&#34;</span>]<span style="color:#bbb">
+</span></code></pre></td></tr></table>
+</div>
+</div><h3 id="启动集群">启动集群</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker-compose up --build
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744469092298-c0641ed1-394f-41c8-8e07-01220fc9ec12.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744469092298-c0641ed1-394f-41c8-8e07-01220fc9ec12.png" />
+        </a>
+    </p>
+<p>一主两从集群搭建成功，三个节点如下</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471607631-5ca6a84a-f7b3-4ad4-a08b-f28b9121e120.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471607631-5ca6a84a-f7b3-4ad4-a08b-f28b9121e120.png" />
+        </a>
+    </p>
+<h3 id="特性验证">特性验证</h3>
+<ul>
+<li><strong>读写分离验证</strong>：主节点写入，从节点读取</li>
+<li><strong>数据同步延迟</strong>：主节点写入后，观察从节点数据可见延迟</li>
+<li><strong>主节点宕机恢复</strong>：手动提升从节点为主节点</li>
+</ul>
+<h4 id="测试-1---数据同步延迟">测试 1 - 数据同步延迟</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 写入主节点</span>
+docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-master-1 redis-cli -a <span style="color:#099">123456</span> <span style="color:#0086b3">set</span> key1 <span style="color:#d14">&#34;master&#34;</span>
+
+<span style="color:#998;font-style:italic"># 从节点读取（禁止写入）</span>
+<span style="color:#998;font-style:italic"># 返回 &#34;master&#34;</span>
+docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave1-1 redis-cli -a <span style="color:#099">123456</span> get key1 
+<span style="color:#998;font-style:italic"># 报错 READONLY</span>
+docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave1-1 redis-cli -a <span style="color:#099">123456</span> <span style="color:#0086b3">set</span> key2 <span style="color:#d14">&#34;slave&#34;</span>
+
+<span style="color:#998;font-style:italic"># 从节点读取（观察延迟）</span>
+docker <span style="color:#0086b3">exec</span> master-slave-mode-redis-slave1-2 redis-cli -a <span style="color:#099">123456</span> --latency -i <span style="color:#099">1</span> get key1
+</code></pre></td></tr></table>
+</div>
+</div><p>异步复制下，从节点数据可见延迟通常在 1~100ms，网络抖动时可能更高。</p>
+<h4 id="测试-2---主节点宕机恢复">测试 2 - 主节点宕机恢复</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker stop master-slave-mode-redis-master-1
+docker <span style="color:#0086b3">exec</span> master-slave-mode-redis-slave1-1 redis-cli -a <span style="color:#099">123456</span> replicaof no one  <span style="color:#998;font-style:italic"># 手动提升为 master</span>
+
+docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave1-1 redis-cli -a <span style="color:#099">123456</span> INFO replication
+</code></pre></td></tr></table>
+</div>
+</div><p>停掉 master 后，从节点读取正常，没法写入了</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471549023-8a1311c5-6715-4bba-b04c-697b621bc94c.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471549023-8a1311c5-6715-4bba-b04c-697b621bc94c.png" />
+        </a>
+    </p>
+<p>将 salve1 设置成主节点</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471954098-468dc3b0-68cf-4d5d-a5a9-2ff7bc243cd1.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471954098-468dc3b0-68cf-4d5d-a5a9-2ff7bc243cd1.png" />
+        </a>
+    </p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471918527-18a8e856-8793-41a4-81cd-45e6ab78d8d4.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471918527-18a8e856-8793-41a4-81cd-45e6ab78d8d4.png" />
+        </a>
+    </p>
+<p>发现 slave1 读写正常，但是 salve2 没读到 salve1 的数据，这是因为 salve2 也需要i调整主节点指向</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472384898-df446ca7-3600-42ab-903c-197772293d71.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472384898-df446ca7-3600-42ab-903c-197772293d71.png" />
+        </a>
+    </p>
+<p>将 slave2 节点的主节点也指向 salve1</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave1-1 redis-cli -a <span style="color:#099">123456</span> REPLICAOF redis-slave1 <span style="color:#099">6379</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472867249-229f1ce5-fb7c-4bad-8ee6-a84afad4629a.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472867249-229f1ce5-fb7c-4bad-8ee6-a84afad4629a.png" />
+        </a>
+    </p>
+<p><strong>效果</strong>：需人工干预，服务中断时间取决于运维响应速度。</p>
+<h2 id="2-sentinel-哨兵模式">2. Sentinel 哨兵模式</h2>
+<p>主从模式中，主节点宕机后需要人为介入，十分不方便，为此引入了哨兵，在主节点下线后时自动选择出新的主节点。</p>
+<ul>
+<li><strong>生产节点数</strong>：3 Sentinel + 1 主 + 2 从（满足法定投票数）</li>
+<li><strong>适用场景</strong>：高可用、自动故障转移</li>
+<li>**redis 版本：**redis 7</li>
+</ul>
+<p>下面是客户端与哨兵集群、主从节点的主要连接过程：</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751031734179-8f1bca39-8019-4d90-b502-7e553b0f4b16.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751031734179-8f1bca39-8019-4d90-b502-7e553b0f4b16.png" />
+        </a>
+    </p>
+<p>哨兵集群是独立于主从数据集群的，它们负责监听主从节点的在线情况，告诉客户端可用的节点，客户端再依此动态连接到不同的节点进行读写。</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751032735690-0a92a1b5-c060-4386-b586-8f8f72535f4b.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751032735690-0a92a1b5-c060-4386-b586-8f8f72535f4b.png" />
+        </a>
+    </p>
+<h3 id="文件目录-1">文件目录</h3>
+<p>创建测试目录 <code>sentinel-mode</code>，文件树如下：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">sentinel-mode/
+├── docker-compose.yml
+├── redis/
+│   ├── master/
+│   │   ├── data/       <span style="color:#998;font-style:italic"># 持久化数据目录</span>
+│   │   └── redis.conf
+│   ├── slave1/
+│   │   ├── data/
+│   │   └── redis.conf
+│   └── slave2/
+│       ├── data/
+│       └── redis.conf
+└── sentinel/
+    ├── sentinel1.conf
+    ├── sentinel2.conf
+    └── sentinel3.conf
+</code></pre></td></tr></table>
+</div>
+</div><p>上述主从模式没有将配置文件挂载到宿主机，这里尝试将数据跟配置都从容器中独立出来，避免丢失：</p>
+<p>创建数据目录：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">mkdir -p redis/<span style="color:#000;font-weight:bold">{</span>master,slave1,slave2<span style="color:#000;font-weight:bold">}</span>/data
+<span style="color:#998;font-style:italic"># 或使用更精细的权限控制</span>
+chmod -R <span style="color:#099">777</span> redis/*/data
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="redisconf-配置">redis.conf 配置</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 主节点配置：redis/master/redis.conf</span>
+port <span style="color:#099">6379</span>
+<span style="color:#0086b3">bind</span> 0.0.0.0
+dir /data
+requirepass <span style="color:#099">123456</span>
+masterauth <span style="color:#099">123456</span>
+appendonly yes
+appendfsync everysec
+
+<span style="color:#998;font-style:italic"># 从节点配置：redis/slave1/redis.conf</span>
+port <span style="color:#099">6379</span>
+<span style="color:#0086b3">bind</span> 0.0.0.0
+dir /data
+requirepass <span style="color:#099">123456</span>
+masterauth <span style="color:#099">123456</span>
+replicaof redis-master <span style="color:#099">6379</span>
+replica-serve-stale-data yes   
+appendonly yes
+
+<span style="color:#998;font-style:italic"># 从节点配置：redis/slave2/redis.conf</span>
+port <span style="color:#099">6379</span>
+<span style="color:#0086b3">bind</span> 0.0.0.0
+dir /data
+requirepass <span style="color:#099">123456</span>
+masterauth <span style="color:#099">123456</span>
+replicaof redis-master <span style="color:#099">6379</span>
+replica-serve-stale-data yes  
+appendonly yes
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="哨兵配置">哨兵配置</h3>
+<p>编辑 <code>sentinel/sentinel*.conf</code> 文件</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">port <span style="color:#099">26379</span>
+sentinel monitor mymaster redis-master <span style="color:#099">6379</span> <span style="color:#099">2</span>  
+sentinel auth-pass mymaster <span style="color:#099">123456</span>
+sentinel down-after-milliseconds mymaster <span style="color:#099">5000</span>
+sentinel failover-timeout mymaster <span style="color:#099">10000</span>
+sentinel parallel-syncs mymaster <span style="color:#099">1</span> 
+sentinel deny-scripts-reconfig yes
+sentinel resolve-hostnames yes
+sentinel announce-hostnames yes
+</code></pre></td></tr></table>
+</div>
+</div><p>配置解释：</p>
+<ol>
+<li><code>sentinel monitor mymaster redis-master 6379 2</code></li>
+</ol>
+<ul>
+<li>
+<ul>
+<li>监控名为 <code>mymaster</code> 的主节点</li>
+<li>主节点地址为 <code>redis-master:6379</code>（使用 Docker 服务名）</li>
+<li><code>2</code> 表示至少需要 2 个哨兵同意才能触发故障转移</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li><code>sentinel auth-pass mymaster mypassword</code></li>
+</ol>
+<ul>
+<li>
+<ul>
+<li>访问受密码保护的 Redis 实例时使用的认证密码</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li><code>sentinel down-after-milliseconds mymaster 5000</code></li>
+</ol>
+<ul>
+<li>
+<ul>
+<li>5 秒内无响应则判定节点不可用</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li><code>sentinel failover-timeout mymaster 10000</code></li>
+</ol>
+<ul>
+<li>
+<ul>
+<li>故障转移超时时间（10 秒）</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li><code>sentinel parallel-syncs mymaster 1</code></li>
+</ol>
+<ul>
+<li>
+<ul>
+<li>故障转移时同时同步的从节点数量</li>
+</ul>
+</li>
+</ul>
+<ol>
+<li><code>sentinel resolve-hostnames</code> 和 <code>sentinel announce-hostnames</code>：开启域名解析，哨兵可以通过 redis-master 容器名找到 master 节点</li>
+</ol>
+<h3 id="docker-compose-配置-1">docker-compose 配置</h3>
+<p>写入下述 <code>docker-compose.yml</code><strong>配置</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">72
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">73
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">74
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">75
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-master</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server /usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/master/redis.conf:/usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/master/data:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;6379:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-slave1</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-slave1<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server /usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/slave1/redis.conf:/usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/slave1/data:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-slave2</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-slave2<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server /usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/slave2/redis.conf:/usr/local/etc/redis/redis.conf<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./redis/slave2/data:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">sentinel1</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>sentinel1<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-sentinel /usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./sentinel/sentinel1.conf:/usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;26379:26379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">sentinel2</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>sentinel2<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-sentinel /usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./sentinel/sentinel2.conf:/usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">      
+</span><span style="color:#bbb">  </span><span style="color:#000080">sentinel3</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>sentinel3<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-sentinel /usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./sentinel/sentinel3.conf:/usr/local/etc/redis/sentinel.conf<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-net<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">depends_on</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- redis-master<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">driver</span>:<span style="color:#bbb"> </span>bridge<span style="color:#bbb">
+</span></code></pre></td></tr></table>
+</div>
+</div><ol>
+<li>自定义名为 <code>redis-net</code>的网络，所有节点都在这个网络下，都能连通</li>
+<li>对于主从节点，将配置和数据挂载到宿主机</li>
+<li>各个节点在主节点启动后启动</li>
+</ol>
+<h3 id="启动集群-1">启动集群</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker-compose up -d
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744707554345-0d65dccc-726e-42f7-af40-9efd9c91f97b.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744707554345-0d65dccc-726e-42f7-af40-9efd9c91f97b.png" />
+        </a>
+    </p>
+<p>关停集群并删除数据</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 停止并删除旧容器</span>
+docker-compose down
+
+<span style="color:#998;font-style:italic"># 清理可能存在的旧数据</span>
+rm -rf redis/*/data/*
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="特性验证-1">特性验证</h3>
+<ul>
+<li><strong>自动故障转移</strong>：杀死主节点，观察 Sentinel 选举新主节点时间</li>
+<li><strong>客户端重定向</strong>：使用支持 Sentinel 的客户端（如 Jedis）测试自动切换</li>
+<li><strong>网络分区恢复</strong>：模拟网络中断后验证数据一致性</li>
+</ul>
+<p>先看下网络情况</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker network inspect sentinel-mode_redis-net
+<span style="color:#000;font-weight:bold">[</span>
+    <span style="color:#000;font-weight:bold">{</span>
+        <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;sentinel-mode_redis-net&#34;</span>,
+        <span style="color:#d14">&#34;Containers&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+            <span style="color:#d14">&#34;5cb420ef5a4dc4afd5c4c0d5928693c8f80810ab7278b6bc5dfb7ed68abaa7ee&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;redis-slave1&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:06&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.6/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>,
+            <span style="color:#d14">&#34;890735847cf0be3a78b14792287b45d0aba83e574019c0c13943c7d8558b741f&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;sentinel1&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:05&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.5/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>,
+            <span style="color:#d14">&#34;8c2a12501beccce209735aff4b88c2663e02f70b6acb91ef9a02697def1d0322&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;sentinel3&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:03&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.3/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>,
+            <span style="color:#d14">&#34;a97c2d77ffeda7a1286ff8925c35f4199a40d1e15f3e2794e5651c8d05dc6086&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;sentinel2&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:04&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.4/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>,
+            <span style="color:#d14">&#34;dacb73d889f3ccc45029eb0e5b5e9e3dbed17a492424bf8850cef165ca575bdc&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;redis-master&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:02&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.2/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>,
+            <span style="color:#d14">&#34;e5450d90898f08dda7b6d0316b7ff76b1e36fd35957bc8185969573b07bf6a1b&#34;</span>: <span style="color:#000;font-weight:bold">{</span>
+                <span style="color:#d14">&#34;Name&#34;</span>: <span style="color:#d14">&#34;redis-slave2&#34;</span>,
+                <span style="color:#d14">&#34;MacAddress&#34;</span>: <span style="color:#d14">&#34;02:42:ac:1b:00:07&#34;</span>,
+                <span style="color:#d14">&#34;IPv4Address&#34;</span>: <span style="color:#d14">&#34;172.27.0.7/16&#34;</span>,
+                <span style="color:#d14">&#34;IPv6Address&#34;</span>: <span style="color:#d14">&#34;&#34;</span>
+            <span style="color:#000;font-weight:bold">}</span>
+        <span style="color:#000;font-weight:bold">}</span>,
+    <span style="color:#000;font-weight:bold">}</span>
+<span style="color:#000;font-weight:bold">]</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="验证1查看主从关系">验证1：查看主从关系</h4>
+<p>主节点信息如下</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> redis-master redis-cli -a <span style="color:#099">123456</span> info replication
+<span style="color:#998;font-style:italic"># Replication</span>
+role:master
+connected_slaves:2
+slave0:ip<span style="color:#000;font-weight:bold">=</span>172.27.0.6,port<span style="color:#000;font-weight:bold">=</span>6379,state<span style="color:#000;font-weight:bold">=</span>online,offset<span style="color:#000;font-weight:bold">=</span>32739,lag<span style="color:#000;font-weight:bold">=</span><span style="color:#099">0</span>
+slave1:ip<span style="color:#000;font-weight:bold">=</span>172.27.0.7,port<span style="color:#000;font-weight:bold">=</span>6379,state<span style="color:#000;font-weight:bold">=</span>online,offset<span style="color:#000;font-weight:bold">=</span>32739,lag<span style="color:#000;font-weight:bold">=</span><span style="color:#099">0</span>
+master_failover_state:no-failover
+master_replid:6132dfc559d7b96b7c7a1f543da022d9ee974aeb
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:32739
+second_repl_offset:-1
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:1
+repl_backlog_histlen:32739
+</code></pre></td></tr></table>
+</div>
+</div><p>从节点信息如下</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> redis-slave1 redis-cli -a <span style="color:#099">123456</span> info replication
+<span style="color:#998;font-style:italic"># Replication</span>
+role:slave
+master_host:redis-master
+master_port:6379
+master_link_status:up
+master_last_io_seconds_ago:1
+master_sync_in_progress:0
+slave_read_repl_offset:37699
+slave_repl_offset:37699
+slave_priority:100
+slave_read_only:1
+replica_announced:1
+connected_slaves:0
+master_failover_state:no-failover
+master_replid:6132dfc559d7b96b7c7a1f543da022d9ee974aeb
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:37699
+second_repl_offset:-1
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:846
+repl_backlog_histlen:36854
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="验证2查看哨兵信息">验证2：查看哨兵信息</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> sentinel1 redis-cli -p <span style="color:#099">26379</span> INFO sentinel
+<span style="color:#998;font-style:italic"># Sentinel</span>
+sentinel_masters:1
+sentinel_tilt:0
+sentinel_tilt_since_seconds:-1
+sentinel_running_scripts:0
+sentinel_scripts_queue_length:0
+sentinel_simulate_failure_flags:0
+master0:name<span style="color:#000;font-weight:bold">=</span>mymaster,status<span style="color:#000;font-weight:bold">=</span>ok,address<span style="color:#000;font-weight:bold">=</span>redis-master:6379,slaves<span style="color:#000;font-weight:bold">=</span>2,sentinels<span style="color:#000;font-weight:bold">=</span><span style="color:#099">3</span>
+</code></pre></td></tr></table>
+</div>
+</div><h4 id="验证3测试高可用">验证3：测试高可用</h4>
+<p>模拟主节点故障，测试服务是否正常</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 暂停主节点容器</span>
+docker pause redis-master
+
+<span style="color:#998;font-style:italic"># 等待约15秒后查看新主节点</span>
+docker <span style="color:#0086b3">exec</span> sentinel1 redis-cli -p <span style="color:#099">26379</span> sentinel get-master-addr-by-name mymaster
+
+<span style="color:#998;font-style:italic"># 恢复原主节点（将变为从节点）</span>
+docker unpause redis-master
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711688697-d449ce52-206e-49c9-9edf-7530c56cbf22.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711688697-d449ce52-206e-49c9-9edf-7530c56cbf22.png" />
+        </a>
+    </p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711973193-54b62d57-3a0f-4fa4-b8d6-cd34b415a7a0.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711973193-54b62d57-3a0f-4fa4-b8d6-cd34b415a7a0.png" />
+        </a>
+    </p>
+<p>redis-master重新上线，变为从节点</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744712177063-a74becda-e1af-4524-b894-aab8f3525560.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744712177063-a74becda-e1af-4524-b894-aab8f3525560.png" />
+        </a>
+    </p>
+<h4 id="验证4持久化">验证4：持久化</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 1. 写入测试数据</span>
+docker <span style="color:#0086b3">exec</span> -it redis-master redis-cli -a <span style="color:#099">123456</span> <span style="color:#0086b3">set</span> test_key <span style="color:#d14">&#34;hello&#34;</span>
+<span style="color:#998;font-style:italic"># 2. 强制重启集群</span>
+docker-compose restart
+<span style="color:#998;font-style:italic"># 3. 验证数据存在</span>
+docker <span style="color:#0086b3">exec</span> -it redis-master redis-cli -a <span style="color:#099">123456</span> get test_key
+<span style="color:#998;font-style:italic"># 应返回 &#34;hello&#34;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>跟普通的主从模式一样，哨兵模式下的主从节点也是读写分离的，需要往主节点写数据，从节点是只读的。</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713329944-6da6302e-0280-439a-9e26-28824198e7bc.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713329944-6da6302e-0280-439a-9e26-28824198e7bc.png" />
+        </a>
+    </p>
+<p>重启集群后数据仍然存在</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713369663-13661cec-4946-48ff-bda0-d8527e7a7174.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713369663-13661cec-4946-48ff-bda0-d8527e7a7174.png" />
+        </a>
+    </p>
+<h2 id="3-cluster-分片集群">3. Cluster 分片集群</h2>
+<p>至少需要三主三从</p>
+<h3 id="目录结构">目录结构</h3>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml">cluster-mode/<span style="color:#bbb">
+</span><span style="color:#bbb"></span>├── docker-compose.yml         <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 核心编排文件</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>├── data/                      <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 数据持久化目录</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>├── node1/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点1数据</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>├── node2/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点2数据</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>├── node3/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点3数据</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>├── node4/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点4数据</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>├── node5/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点5数据</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>└── node6/                 <span style="color:#bbb"> </span><span style="color:#998;font-style:italic"># 节点6数据</span><span style="color:#bbb">
+</span></code></pre></td></tr></table>
+</div>
+</div><p>创建目录</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">mkdir -p ./data/<span style="color:#000;font-weight:bold">{</span>node1,node2,node3,node4,node5,node6<span style="color:#000;font-weight:bold">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="docker-compose-配置-2">docker-compose 配置</h3>
+<p>写入下述 <code>**docker-compose.yml**</code><strong>配置</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">63
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">64
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">65
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">66
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">67
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">68
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">69
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">70
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">71
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">72
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">73
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">74
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">75
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">76
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">77
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">78
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">79
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-1</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-1<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7001:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node1:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.2</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-2</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-2<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7002:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node2:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.3</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-3</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-3<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7003:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node3:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.4</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-4</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-4<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7004:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node4:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.5</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-5</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-5<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7005:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node5:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.6</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-6</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-6<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7006:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node6:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.7</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">driver</span>:<span style="color:#bbb"> </span>bridge<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ipam</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">config</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>- <span style="color:#000080">subnet</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.0</span>/24<span style="color:#bbb">
+</span></code></pre></td></tr></table>
+</div>
+</div><p>配置说明：</p>
+<table>
+<thead>
+<tr>
+<th><strong>参数</strong></th>
+<th><strong>说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--cluster-enabled</code></td>
+<td>必须设置为 <code>yes</code>，以启用集群模式</td>
+</tr>
+<tr>
+<td><code>--cluster-node-timeout</code></td>
+<td>节点不可达的超时时间（单位：毫秒）</td>
+</tr>
+<tr>
+<td><code>ipam</code>配置</td>
+<td>固定IP确保节点始终使用相同地址</td>
+</tr>
+<tr>
+<td><code>--cluster-replicas 1</code></td>
+<td>每个主节点有1个从副本</td>
+</tr>
+<tr>
+<td><code>appendonly yes</code></td>
+<td>启用AOF持久化，确保数据安全</td>
+</tr>
+</tbody>
+</table>
+<h3 id="docker-compose-scaleyml-配置">docker-compose-scale.yml 配置</h3>
+<p>扩容，新增节点，再通过命令加入集群，见后续的验证5。</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#000080">services</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-node-7</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">image</span>:<span style="color:#bbb"> </span>redis:7.0<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">container_name</span>:<span style="color:#bbb"> </span>redis-node-7<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">command</span>:<span style="color:#bbb"> </span>redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">ports</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- <span style="color:#d14">&#34;7007:6379&#34;</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">volumes</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span>- ./data/node7:/data<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">      </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#000080">ipv4_address</span>:<span style="color:#bbb"> </span><span style="color:#099">172.20.0.8</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#000080">networks</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#000080">redis-cluster-net</span>:<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">external</span>:<span style="color:#bbb"> </span><span style="color:#000;font-weight:bold">true</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#000080">name</span>:<span style="color:#bbb"> </span>cluster-mode_redis-cluster-net<span style="color:#bbb">
+</span></code></pre></td></tr></table>
+</div>
+</div><h3 id="启动集群-2">启动集群</h3>
+<p>启动所有节点</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker-compose up -d
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744786706110-cbaf603b-1917-4229-a08c-6bd2c13d5607.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744786706110-cbaf603b-1917-4229-a08c-6bd2c13d5607.png" />
+        </a>
+    </p>
+<p>进入任意一个节点，执行下面命令创建 Redis Cluster</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli --cluster create <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.2:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.3:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.4:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.5:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.6:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  172.20.0.7:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  --cluster-replicas <span style="color:#099">1</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>  --cluster-yes
+</code></pre></td></tr></table>
+</div>
+</div><p>结果如下</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli --cluster create <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.2:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.3:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.4:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.5:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.6:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   172.20.0.7:6379 <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   --cluster-replicas <span style="color:#099">1</span> <span style="color:#d14">\
+</span><span style="color:#d14"></span>&gt;   --cluster-yes
+&gt;&gt;&gt; Performing <span style="color:#0086b3">hash</span> slots allocation on <span style="color:#099">6</span> nodes...
+Master<span style="color:#000;font-weight:bold">[</span>0<span style="color:#000;font-weight:bold">]</span> -&gt; Slots <span style="color:#099">0</span> - <span style="color:#099">5460</span>
+Master<span style="color:#000;font-weight:bold">[</span>1<span style="color:#000;font-weight:bold">]</span> -&gt; Slots <span style="color:#099">5461</span> - <span style="color:#099">10922</span>
+Master<span style="color:#000;font-weight:bold">[</span>2<span style="color:#000;font-weight:bold">]</span> -&gt; Slots <span style="color:#099">10923</span> - <span style="color:#099">16383</span>
+Adding replica 172.20.0.6:6379 to 172.20.0.2:6379
+Adding replica 172.20.0.7:6379 to 172.20.0.3:6379
+Adding replica 172.20.0.5:6379 to 172.20.0.4:6379
+M: 1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>0-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>5461-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5462</span> slots<span style="color:#000;font-weight:bold">)</span> master
+M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>10923-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+S: efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379
+   replicates ae9abf26cd6c7162d367519917e8cf217314baaf
+S: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+   replicates 1d4feacf706e4e0db2f96bc68dcde65662252a57
+S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
+   replicates ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+&gt;&gt;&gt; Nodes configuration updated
+&gt;&gt;&gt; Assign a different config epoch to each node
+&gt;&gt;&gt; Sending CLUSTER MEET messages to join the cluster
+Waiting <span style="color:#000;font-weight:bold">for</span> the cluster to join
+.
+&gt;&gt;&gt; Performing Cluster Check <span style="color:#000;font-weight:bold">(</span>using node 172.20.0.2:6379<span style="color:#000;font-weight:bold">)</span>
+M: 1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>0-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>10923-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+S: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates 1d4feacf706e4e0db2f96bc68dcde65662252a57
+M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>5461-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5462</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+S: efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ae9abf26cd6c7162d367519917e8cf217314baaf
+S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All nodes agree about slots configuration.
+&gt;&gt;&gt; Check <span style="color:#000;font-weight:bold">for</span> open slots...
+&gt;&gt;&gt; Check slots coverage...
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All <span style="color:#099">16384</span> slots covered.
+</code></pre></td></tr></table>
+</div>
+</div><p>可以看到只有主节点有槽位分配，从节点备份主节点数据，主从关系及槽位分配如下图所示：</p>
+<p>​     
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744794924939-deab42d8-99e1-41da-b27f-3e35a47a4d3e.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744794924939-deab42d8-99e1-41da-b27f-3e35a47a4d3e.png" />
+        </a>
+    </p>
+<h3 id="特性验证-2">特性验证</h3>
+<ul>
+<li><strong>数据分片验证</strong>：插入大量数据，观察 key 分布在不同节点</li>
+<li><strong>节点扩容</strong>：添加新节点并迁移哈希槽</li>
+<li><strong>故障转移</strong>：杀死主节点，观察副本节点接管</li>
+<li><strong>跨槽操作</strong>：测试 <code>**MGET**</code> 跨多个槽的报错行为</li>
+</ul>
+<h4 id="验证1检查集群状态">验证1：检查集群状态</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli -c cluster nodes
+</code></pre></td></tr></table>
+</div>
+</div><p>输出如下</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli -c cluster nodes
+ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744787462601</span> <span style="color:#099">3</span> connected 10923-16383
+1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379@16379 myself,master - <span style="color:#099">0</span> <span style="color:#099">1744787462000</span> <span style="color:#099">1</span> connected 0-5460
+e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 slave 1d4feacf706e4e0db2f96bc68dcde65662252a57 <span style="color:#099">0</span> <span style="color:#099">1744787463000</span> <span style="color:#099">1</span> connected
+ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744787462000</span> <span style="color:#099">2</span> connected 5461-10922
+efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379@16379 slave ae9abf26cd6c7162d367519917e8cf217314baaf <span style="color:#099">0</span> <span style="color:#099">1744787462601</span> <span style="color:#099">3</span> connected
+7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379@16379 slave ebe345c90dd4b51724d2797bfd44cb5c89f863ec <span style="color:#099">0</span> <span style="color:#099">1744787463609</span> <span style="color:#099">2</span> connected
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744787516863-f39334e2-6496-48bc-82a2-e734e43dbe40.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744787516863-f39334e2-6496-48bc-82a2-e734e43dbe40.png" />
+        </a>
+    </p>
+<p>输出含义</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 格式说明</span>
+<span style="color:#000;font-weight:bold">[</span>节点ID<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>IP:端口@集群总线端口<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>角色<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>主节点ID<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>PING发送时间<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>PONG接收时间<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>配置纪元<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>连接状态<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">[</span>槽位分配<span style="color:#000;font-weight:bold">]</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>举例说明</p>
+<table>
+<thead>
+<tr>
+<th><strong>字段</strong></th>
+<th><strong>说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>节点ID</td>
+<td><code>ae9abf26cd6c7162d367519917e8cf217314baaf</code>(唯一标识)</td>
+</tr>
+<tr>
+<td>服务地址</td>
+<td><code>172.20.0.4:6379</code> (客户端连接地址)</td>
+</tr>
+<tr>
+<td>集群总线端口</td>
+<td><code>16379</code>(节点间通信端口)</td>
+</tr>
+<tr>
+<td>角色</td>
+<td><code>master</code> (主节点)</td>
+</tr>
+<tr>
+<td>主节点ID</td>
+<td><code>-</code> (主节点无上级节点)</td>
+</tr>
+<tr>
+<td>配置纪元</td>
+<td><code>3</code>(集群配置版本号)</td>
+</tr>
+<tr>
+<td>槽位分配</td>
+<td><code>10923-16383</code>(管理5461个槽位)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="验证2-写入跨槽位数据">验证2. 写入跨槽位数据</h4>
+<p>Redis Cluster 通过哈希槽分片（16384 slots） 管理数据分布，要求单命令中的多个键必须属于同一槽位。若违反此规则，将出现以下典型表现：</p>
+<p>1、多键操作被拒绝</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 尝试写入跨槽位的键（key1 在 slot1，key2 在 slot2）</span>
+$ docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli -c MSET user:1000 <span style="color:#d14">&#34;testdata&#34;</span> product:2000 <span style="color:#d14">&#34;testdata&#34;</span>
+<span style="color:#000;font-weight:bold">(</span>error<span style="color:#000;font-weight:bold">)</span> CROSSSLOT Keys in request don<span style="color:#a61717;background-color:#e3d2d2">&#39;</span>t <span style="color:#0086b3">hash</span> to the same slot
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744788615401-f8d97ecd-b0f0-427a-b18c-ea858ad1fb3b.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744788615401-f8d97ecd-b0f0-427a-b18c-ea858ad1fb3b.png" />
+        </a>
+    </p>
+<p>2、事务（MULTI/EXEC）中断</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 先进入主节点容器</span>
+$ docker <span style="color:#0086b3">exec</span> -it redis-node-1 /bin/bash
+$ <span style="color:#0086b3">cd</span> /bin
+$ redis-cli -c
+
+<span style="color:#998;font-style:italic"># 事务中包含跨槽位操作</span>
+127.0.0.1:6379&gt; MULTI
+OK
+127.0.0.1:6379&gt; SET user:1000 <span style="color:#d14">&#34;testdata&#34;</span>
+QUEUED
+127.0.0.1:6379&gt; SET product:2000 <span style="color:#d14">&#34;testdata&#34;</span>
+QUEUED
+127.0.0.1:6379&gt; EXEC
+<span style="color:#000;font-weight:bold">(</span>error<span style="color:#000;font-weight:bold">)</span> EXECABORT Transaction discarded because of previous errors
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789003603-3e3a0750-5c54-4ec7-aac7-58ef3a439694.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789003603-3e3a0750-5c54-4ec7-aac7-58ef3a439694.png" />
+        </a>
+    </p>
+<p>事务中的命令在预检阶段发现跨槽位操作，最后事务完全回滚，所有命令均不执行。</p>
+<p>3、Lua 脚本受限</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 脚本中使用跨槽位的键</span>
+$ <span style="color:#0086b3">eval</span> <span style="color:#d14">&#34;redis.call(&#39;SET&#39;,KEYS[1],&#39;val&#39;);redis.call(&#39;SET&#39;,KEYS[2],&#39;val&#39;)&#34;</span> <span style="color:#099">2</span> user:1000 product:2000
+<span style="color:#000;font-weight:bold">(</span>error<span style="color:#000;font-weight:bold">)</span> CROSSSLOT Keys in request don<span style="color:#a61717;background-color:#e3d2d2">&#39;</span>t <span style="color:#0086b3">hash</span> to the same slot
+</code></pre></td></tr></table>
+</div>
+</div><p>Lua 脚本中所有操作的键必须属于同一槽位（除非使用 <code>{hash tag}</code>）</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789739013-31b6380a-9ddb-431c-accf-b45f65d3a595.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789739013-31b6380a-9ddb-431c-accf-b45f65d3a595.png" />
+        </a>
+    </p>
+<h4 id="验证3-槽位分布验证">验证3. 槽位分布验证</h4>
+<p>进入任意一个节点，输入下面命令可以看到当前集群的槽位分布</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ redis-cli --cluster check 172.20.0.2:6379
+172.20.0.2:6379 <span style="color:#000;font-weight:bold">(</span>1d4feacf...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">1</span> keys | <span style="color:#099">5461</span> slots | <span style="color:#099">1</span> slaves.
+172.20.0.4:6379 <span style="color:#000;font-weight:bold">(</span>ae9abf26...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">0</span> keys | <span style="color:#099">5461</span> slots | <span style="color:#099">1</span> slaves.
+172.20.0.3:6379 <span style="color:#000;font-weight:bold">(</span>ebe345c9...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">0</span> keys | <span style="color:#099">5462</span> slots | <span style="color:#099">1</span> slaves.
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> <span style="color:#099">1</span> keys in <span style="color:#099">3</span> masters.
+0.00 keys per slot on average.
+&gt;&gt;&gt; Performing Cluster Check <span style="color:#000;font-weight:bold">(</span>using node 172.20.0.2:6379<span style="color:#000;font-weight:bold">)</span>
+M: 1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>0-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>10923-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+S: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates 1d4feacf706e4e0db2f96bc68dcde65662252a57
+M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>5461-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5462</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+S: efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ae9abf26cd6c7162d367519917e8cf217314baaf
+S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All nodes agree about slots configuration.
+&gt;&gt;&gt; Check <span style="color:#000;font-weight:bold">for</span> open slots...
+&gt;&gt;&gt; Check slots coverage...
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All <span style="color:#099">16384</span> slots covered.
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789923782-aed2b262-e0e1-435d-9d17-da573bdc821a.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789923782-aed2b262-e0e1-435d-9d17-da573bdc821a.png" />
+        </a>
+    </p>
+<h4 id="验证4-主从切换测试">验证4. 主从切换测试</h4>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 暂停节点</span>
+docker pause redis-node-1
+
+<span style="color:#998;font-style:italic"># 观察从节点晋升（约15秒后）</span>
+docker <span style="color:#0086b3">exec</span> -it redis-node-5 redis-cli cluster nodes
+</code></pre></td></tr></table>
+</div>
+</div><p>从输出可以看到从节点 redis-node-5 晋升成为了主节点</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> -it redis-node-5 redis-cli cluster nodes
+ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744790458514</span> <span style="color:#099">2</span> connected 5461-10922
+efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379@16379 slave ae9abf26cd6c7162d367519917e8cf217314baaf <span style="color:#099">0</span> <span style="color:#099">1744790459624</span> <span style="color:#099">3</span> connected
+ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744790458000</span> <span style="color:#099">3</span> connected 10923-16383
+e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <span style="color:#099">0</span> <span style="color:#099">1744790457000</span> <span style="color:#099">7</span> connected 0-5460
+7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379@16379 slave ebe345c90dd4b51724d2797bfd44cb5c89f863ec <span style="color:#099">0</span> <span style="color:#099">1744790459000</span> <span style="color:#099">2</span> connected
+1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379@16379 master,fail - <span style="color:#099">1744790441557</span> <span style="color:#099">1744790439000</span> <span style="color:#099">1</span> connected
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790578526-a59505c4-36ff-492b-9344-d97a58b0aea3.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790578526-a59505c4-36ff-492b-9344-d97a58b0aea3.png" />
+        </a>
+    </p>
+<p>当 redis-node-1 重新上线，将会变成 redis-node-5 的从节点</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> -it redis-node-5 redis-cli cluster nodes
+ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744790625000</span> <span style="color:#099">2</span> connected 5461-10922
+efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379@16379 slave ae9abf26cd6c7162d367519917e8cf217314baaf <span style="color:#099">0</span> <span style="color:#099">1744790627053</span> <span style="color:#099">3</span> connected
+ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744790625000</span> <span style="color:#099">3</span> connected 10923-16383
+e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <span style="color:#099">0</span> <span style="color:#099">1744790625000</span> <span style="color:#099">7</span> connected 0-5460
+7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379@16379 slave ebe345c90dd4b51724d2797bfd44cb5c89f863ec <span style="color:#099">0</span> <span style="color:#099">1744790626000</span> <span style="color:#099">2</span> connected
+1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379@16379 slave e18d1d38fb891a49079944c3ece1589ad39cdb9f <span style="color:#099">0</span> <span style="color:#099">1744790626952</span> <span style="color:#099">7</span> connected
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790669151-fa236dec-5874-4148-ae6e-f5e44bc4b2ce.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790669151-fa236dec-5874-4148-ae6e-f5e44bc4b2ce.png" />
+        </a>
+    </p>
+<h4 id="验证5-集群扩容测试">验证5. 集群扩容测试</h4>
+<p>创建目录并启动新节点</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">mkdir -p ./data/node7
+<span style="color:#998;font-style:italic"># 仅启动 redis-node-7</span>
+docker-compose -f docker-compose-scale.yml up -d redis-node-7
+<span style="color:#998;font-style:italic"># 验证节点状态，应返回 PONG</span>
+docker <span style="color:#0086b3">exec</span> -it redis-node-7 redis-cli ping  
+</code></pre></td></tr></table>
+</div>
+</div><p>加入集群，有以下两种方式</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 将新节点作为主节点加入（暂未分配槽位）</span>
+redis-cli --cluster add-node 172.20.0.8:6379 172.20.0.2:6379
+
+<span style="color:#998;font-style:italic"># 将新节点作为从节点加入（需指定主节点ID）</span>
+redis-cli --cluster add-node 172.20.0.8:6379 172.20.0.2:6379 --cluster-slave --cluster-master-id &lt;主节点ID&gt;
+</code></pre></td></tr></table>
+</div>
+</div><p>语法如下</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">redis-cli --cluster add-node &lt;新节点IP:端口&gt; &lt;已知集群节点IP:端口&gt;
+redis-cli --cluster add-node 新节点IP:端口 已知节点IP:端口 <span style="color:#d14">\
+</span><span style="color:#d14"></span>  --cluster-slave <span style="color:#d14">\
+</span><span style="color:#d14"></span>  --cluster-master-id &lt;目标主节点ID&gt;
+</code></pre></td></tr></table>
+</div>
+</div><p>采用第一种，新节点作为主节点加入集群</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792177164-4b6e2f22-b6c0-4209-ad23-4f159e31ac45.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792177164-4b6e2f22-b6c0-4209-ad23-4f159e31ac45.png" />
+        </a>
+    </p>
+<p>可以看到新节点没有分配槽位：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">127.0.0.1:6379&gt; cluster nodes
+9fcda01de9e9757b9024de3e025b77c49787f63a 172.20.0.8:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744792216000</span> <span style="color:#099">0</span> connected
+ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744792218067</span> <span style="color:#099">2</span> connected 5461-10922
+efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379@16379 slave ae9abf26cd6c7162d367519917e8cf217314baaf <span style="color:#099">0</span> <span style="color:#099">1744792217000</span> <span style="color:#099">3</span> connected
+ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379@16379 master - <span style="color:#099">0</span> <span style="color:#099">1744792217000</span> <span style="color:#099">3</span> connected 10923-16383
+e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <span style="color:#099">0</span> <span style="color:#099">1744792217000</span> <span style="color:#099">7</span> connected 0-5460
+7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379@16379 slave ebe345c90dd4b51724d2797bfd44cb5c89f863ec <span style="color:#099">0</span> <span style="color:#099">1744792217000</span> <span style="color:#099">2</span> connected
+1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379@16379 slave e18d1d38fb891a49079944c3ece1589ad39cdb9f <span style="color:#099">0</span> <span style="color:#099">1744792217866</span> <span style="color:#099">7</span> connected
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792249578-b351af2b-76af-4409-84a5-4f8807af3876.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792249578-b351af2b-76af-4409-84a5-4f8807af3876.png" />
+        </a>
+    </p>
+<p>尝试往新节点中写数据，发现能够写入，但实际只是 MOVED 到并写入到了其他的主节点</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ docker <span style="color:#0086b3">exec</span> -it redis-node-8 redis-cli -c <span style="color:#0086b3">set</span> user:001 <span style="color:#d14">&#34;testdata&#34;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792726446-a0b826ca-b23c-42db-9a3c-786a7fdfa83a.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792726446-a0b826ca-b23c-42db-9a3c-786a7fdfa83a.png" />
+        </a>
+    </p>
+<p><strong>分配槽位</strong></p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 2. 分配槽位给新节点</span>
+redis-cli --cluster reshard 172.20.0.2:6379
+<span style="color:#998;font-style:italic"># 交互式操作选择迁移槽位数和源节点</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>语法：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">redis-cli --cluster reshard &lt;任意集群节点IP:端口&gt;
+</code></pre></td></tr></table>
+</div>
+</div><p>交互式配置</p>
+<table>
+<thead>
+<tr>
+<th>交互问题</th>
+<th>正确回答方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要移动多少槽位？</td>
+<td>输入需要迁移的槽位总数（如 1000）</td>
+</tr>
+<tr>
+<td>接收节点ID是什么？</td>
+<td>输入目标节点的 ID（可通过 <code>cluster nodes</code>查询）</td>
+</tr>
+<tr>
+<td>从哪些节点迁移数据？</td>
+<td>输入： <code>all</code>：从所有节点均摊迁移 <code>指定节点ID</code>：从特定节点迁移</td>
+</tr>
+<tr>
+<td>确认迁移计划？</td>
+<td>输入 <code>yes</code> 开始执行</td>
+</tr>
+</tbody>
+</table>
+<p>执行重新分配：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ redis-cli --cluster reshard 172.20.0.2:6379
+&gt;&gt;&gt; Performing Cluster Check <span style="color:#000;font-weight:bold">(</span>using node 172.20.0.2:6379<span style="color:#000;font-weight:bold">)</span>
+S: 1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates e18d1d38fb891a49079944c3ece1589ad39cdb9f
+M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>10923-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>0-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>5461-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5462</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: 9fcda01de9e9757b9024de3e025b77c49787f63a 172.20.0.8:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> master
+S: efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ae9abf26cd6c7162d367519917e8cf217314baaf
+S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All nodes agree about slots configuration.
+&gt;&gt;&gt; Check <span style="color:#000;font-weight:bold">for</span> open slots...
+&gt;&gt;&gt; Check slots coverage...
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All <span style="color:#099">16384</span> slots covered.
+How many slots <span style="color:#000;font-weight:bold">do</span> you want to move <span style="color:#000;font-weight:bold">(</span>from <span style="color:#099">1</span> to 16384<span style="color:#000;font-weight:bold">)</span>? <span style="color:#099">100</span>
+What is the receiving node ID? 9fcda01de9e9757b9024de3e025b77c49787f63a
+Please enter all the <span style="color:#0086b3">source</span> node IDs.
+  Type <span style="color:#d14">&#39;all&#39;</span> to use all the nodes as <span style="color:#0086b3">source</span> nodes <span style="color:#000;font-weight:bold">for</span> the <span style="color:#0086b3">hash</span> slots.
+  Type <span style="color:#d14">&#39;done&#39;</span> once you entered all the <span style="color:#0086b3">source</span> nodes IDs.
+Source node <span style="color:#998;font-style:italic">#1: all</span>
+
+Ready to move <span style="color:#099">100</span> slots.
+  Source nodes:
+    M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+       slots:<span style="color:#000;font-weight:bold">[</span>10923-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+       <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+    M: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+       slots:<span style="color:#000;font-weight:bold">[</span>0-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5461</span> slots<span style="color:#000;font-weight:bold">)</span> master
+       <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+    M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+       slots:<span style="color:#000;font-weight:bold">[</span>5461-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5462</span> slots<span style="color:#000;font-weight:bold">)</span> master
+       <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+  Destination node:
+    M: 9fcda01de9e9757b9024de3e025b77c49787f63a 172.20.0.8:6379
+       slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> master
+  Resharding plan:
+    Moving slot <span style="color:#099">5461</span> from ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+    Moving slot <span style="color:#099">5462</span> from ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+    ...
+Do you want to proceed with the proposed reshard plan <span style="color:#000;font-weight:bold">(</span>yes/no<span style="color:#000;font-weight:bold">)</span>? yes
+Moving slot <span style="color:#099">5461</span> from 172.20.0.3:6379 to 172.20.0.8:6379: 
+Moving slot <span style="color:#099">5462</span> from 172.20.0.3:6379 to 172.20.0.8:6379: 
+Moving slot <span style="color:#099">5463</span> from 172.20.0.3:6379 to 172.20.0.8:6379: 
+Moving slot <span style="color:#099">5464</span> from 172.20.0.3:6379 to 172.20.0.8:6379: 
+Moving slot <span style="color:#099">5465</span> from 172.20.0.3:6379 to 172.20.0.8:6379: 
+...
+</code></pre></td></tr></table>
+</div>
+</div><p>查看主节点槽位分配情况</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli --cluster check 172.20.0.2:6379
+172.20.0.4:6379 <span style="color:#000;font-weight:bold">(</span>ae9abf26...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">0</span> keys | <span style="color:#099">5428</span> slots | <span style="color:#099">1</span> slaves.
+172.20.0.6:6379 <span style="color:#000;font-weight:bold">(</span>e18d1d38...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">2</span> keys | <span style="color:#099">5428</span> slots | <span style="color:#099">1</span> slaves.
+172.20.0.3:6379 <span style="color:#000;font-weight:bold">(</span>ebe345c9...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">0</span> keys | <span style="color:#099">5428</span> slots | <span style="color:#099">1</span> slaves.
+172.20.0.8:6379 <span style="color:#000;font-weight:bold">(</span>9fcda01d...<span style="color:#000;font-weight:bold">)</span> -&gt; <span style="color:#099">0</span> keys | <span style="color:#099">100</span> slots | <span style="color:#099">0</span> slaves.
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> <span style="color:#099">2</span> keys in <span style="color:#099">4</span> masters.
+0.00 keys per slot on average.
+&gt;&gt;&gt; Performing Cluster Check <span style="color:#000;font-weight:bold">(</span>using node 172.20.0.2:6379<span style="color:#000;font-weight:bold">)</span>
+S: 1d4feacf706e4e0db2f96bc68dcde65662252a57 172.20.0.2:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates e18d1d38fb891a49079944c3ece1589ad39cdb9f
+M: ae9abf26cd6c7162d367519917e8cf217314baaf 172.20.0.4:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>10956-16383<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5428</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>33-5460<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5428</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: ebe345c90dd4b51724d2797bfd44cb5c89f863ec 172.20.0.3:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>5495-10922<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">5428</span> slots<span style="color:#000;font-weight:bold">)</span> master
+   <span style="color:#099">1</span> additional replica<span style="color:#000;font-weight:bold">(</span>s<span style="color:#000;font-weight:bold">)</span>
+M: 9fcda01de9e9757b9024de3e025b77c49787f63a 172.20.0.8:6379
+   slots:<span style="color:#000;font-weight:bold">[</span>0-32<span style="color:#000;font-weight:bold">]</span>,<span style="color:#000;font-weight:bold">[</span>5461-5494<span style="color:#000;font-weight:bold">]</span>,<span style="color:#000;font-weight:bold">[</span>10923-10955<span style="color:#000;font-weight:bold">]</span> <span style="color:#000;font-weight:bold">(</span><span style="color:#099">100</span> slots<span style="color:#000;font-weight:bold">)</span> master
+S: efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ae9abf26cd6c7162d367519917e8cf217314baaf
+S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
+   slots: <span style="color:#000;font-weight:bold">(</span><span style="color:#099">0</span> slots<span style="color:#000;font-weight:bold">)</span> slave
+   replicates ebe345c90dd4b51724d2797bfd44cb5c89f863ec
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All nodes agree about slots configuration.
+&gt;&gt;&gt; Check <span style="color:#000;font-weight:bold">for</span> open slots...
+&gt;&gt;&gt; Check slots coverage...
+<span style="color:#000;font-weight:bold">[</span>OK<span style="color:#000;font-weight:bold">]</span> All <span style="color:#099">16384</span> slots covered.
+</code></pre></td></tr></table>
+</div>
+</div><p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744793948547-59e25cf8-4177-47f7-bd31-3809f1f1488f.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744793948547-59e25cf8-4177-47f7-bd31-3809f1f1488f.png" />
+        </a>
+    </p>
+<p>目前的节点关系和槽位分配如下图所示：</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744795854234-07ec670c-ffb7-4a70-a1e9-527bb7dd7983.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744795854234-07ec670c-ffb7-4a70-a1e9-527bb7dd7983.png" />
+        </a>
+    </p>
+<h1 id="三遇到的问题">三、遇到的问题</h1>
+<h3 id="行内注释导致集群启动失败">行内注释导致集群启动失败</h3>
+<p>构建集群后发现容器没启动成功</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701221183-6d40427f-403e-472f-a76c-15b4d8dda96b.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701221183-6d40427f-403e-472f-a76c-15b4d8dda96b.png" />
+        </a>
+    </p>
+<p>通过查看容器日志发现可能是行内注释导致的，</p>
+<p>
+        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701278473-a176ae9f-57f3-4b72-9af7-90b2ede52995.png">
+            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701278473-a176ae9f-57f3-4b72-9af7-90b2ede52995.png" />
+        </a>
+    </p>
+<p>Redis 配置文件 <strong>严格不支持行内注释</strong>，所有以 <code>#</code> 开头的注释必须独占一行。配置文件中出现了类似这样的错误写法：</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">dir /data                        <span style="color:#998;font-style:italic"># 数据存储目录  ← 错误！注释不能跟在配置项后面</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>需要改成</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#998;font-style:italic"># 数据存储目录  ← 错误！注释不能跟在配置项后面</span>
+dir /data                        
+</code></pre></td></tr></table>
+</div>
+</div><h3 id="集群启动时哨兵启动失败">集群启动时哨兵启动失败</h3>
+<p>一开始使用 redis:alpine 镜像，启动集群时，发现 master、slave1、slave2 都能正常启动，但是三个哨兵节点都启动失败，通过 <code>docker logs sentinel1</code>发现如下报错信息</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash"><span style="color:#000;font-weight:bold">[</span>root@localhost sentinel-mode<span style="color:#000;font-weight:bold">]</span><span style="color:#998;font-style:italic"># docker-compose logs --tail=100 sentinel1</span>
+sentinel1  | 1:X <span style="color:#099">15</span> Apr <span style="color:#099">2025</span> 08:03:25.961 <span style="color:#998;font-style:italic"># Failed to resolve hostname &#39;redis-master&#39;</span>
+sentinel1  | 
+sentinel1  | *** FATAL CONFIG FILE ERROR <span style="color:#000;font-weight:bold">(</span>Redis 6.2.17<span style="color:#000;font-weight:bold">)</span> ***
+sentinel1  | Reading the configuration file, at line <span style="color:#099">2</span>
+sentinel1  | &gt;&gt;&gt; <span style="color:#d14">&#39;sentinel monitor mymaster redis-master 6379 2&#39;</span>
+sentinel1  | Can<span style="color:#a61717;background-color:#e3d2d2">&#39;</span>t resolve instance hostname.
+</code></pre></td></tr></table>
+</div>
+</div><p>看着像是哨兵节点尝试连接主节点的时候发现无法通过 redis-master 解析出主节点的 ip，通过<a href="https://blog.csdn.net/qq_42183414/article/details/130847034">这个博客</a>发现，只有 6.2 以上版本的 <a href="https://so.csdn.net/so/search?q=sentinel&amp;spm=1001.2101.3001.7020">sentinel</a> 才能解析主机名，但默认不启用。需要添加</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">sentinel resolve-hostnames yes
+sentinel announce-hostname yes  <span style="color:#998;font-style:italic"># Redis 7.0+ 改为 sentinel announce-hostname</span>
+</code></pre></td></tr></table>
+</div>
+</div>
+        </div>
+
+        
+
+
+        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/post/2021-06-03-hashmap-concurrency/" style="color: #0969da">聊聊多线程环境下的 HashMap</a></li>
+        
+        <li><a href="/post/2021-05-15-mvcc/" style="color: #0969da">浅谈 MySQL 的 MVCC 机制</a></li>
+        
+        <li><a href="/post/2021-04-06-deadlock/" style="color: #0969da">记一次工作中数据库死锁问题定位与解决</a></li>
+        
+        <li><a href="/post/2020-08-25-strategy-app/" style="color: #0969da">记一次在实际项目中的策略设计模式应用</a></li>
+        
+        <li><a href="/post/2018-10-18-impl-of-aes/" style="color: #0969da">AES 加密算法实现</a></li>
+        
+    </ul>
+</div>
+
+
+        <div class="post-meta meta-tags">
+            
+            <ul class="clearfix">
+                
+                <li><a href='/tags/%E6%8A%80%E6%9C%AF'>技术</a></li>
+                
+                <li><a href='/tags/redis'>Redis</a></li>
+                
+            </ul>
+            
+        </div>
+    </article>
+    
+    
+
+    
+    
+</div>
+
+                    <footer id="footer">
+    <div>
+        &copy; 2025 <a href="http://cszxyang.cn/">cszxyang By </a>
+        
+    </div>
+    <br />
+    <div>
+        <div class="github-badge">
+            <a href="https://gohugo.io/" target="_black" rel="nofollow"><span class="badge-subject">Powered by</span><span class="badge-value bg-blue">Hugo</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/cszxyang" target="_black"><span class="badge-subject">Design by</span><span class="badge-value bg-brightgreen">cszxyang</span></a>
+        </div>
+        <div class="github-badge">
+            <a href="https://github.com/flysnow-org/maupassant-hugo" target="_black"><span class="badge-subject">Theme</span><span class="badge-value bg-yellowgreen">Maupassant</span></a>
+        </div>
+    </div>
+</footer>
+
+
+    
+    <script type="text/javascript">
+        window.MathJax = {
+            tex2jax: {
+                inlineMath: [['$', '$']],
+                processEscapes: true
+                }
+            };
+    </script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script><script src="https://cdn.bootcdn.net/ajax/libs/fancybox/3.5.7/jquery.fancybox.min.js"></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src='/js/totop.js?v=0.0.0' async=""></script>
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'G-C5B6KW9SZQ', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+
+    <script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+                </div>
+
+                
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -6,7 +6,16 @@
     <description>Recent content on cszxyang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 03 Jun 2021 10:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Wed, 16 Apr 2025 19:54:24 +0200</lastBuildDate><atom:link href="http://cszxyang.cn/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Redis 集群模式搭建</title>
+      <link>http://cszxyang.cn/post/2025-04-16-redis-cluster-modes/</link>
+      <pubDate>Wed, 16 Apr 2025 19:54:24 +0200</pubDate>
+      
+      <guid>http://cszxyang.cn/post/2025-04-16-redis-cluster-modes/</guid>
+      <description>&lt;p&gt;最近有空，做一些关于 Redis 集群部署的实验，以此记录。&lt;/p&gt;</description>
+    </item>
+    
     <item>
       <title>聊聊多线程环境下的 HashMap</title>
       <link>http://cszxyang.cn/post/2021-06-03-hashmap-concurrency/</link>
