@@ -155,8 +155,8 @@
 <li><strong>适用场景</strong>：读多写少、数据冷备</li>
 </ul>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751030899482-972cfb1c-5bff-4950-9402-3df62c9a3f3f.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751030899482-972cfb1c-5bff-4950-9402-3df62c9a3f3f.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/1.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/1.png" />
         </a>
     </p>
 <h3 id="文件目录">文件目录</h3>
@@ -246,14 +246,14 @@ chmod -R <span style="color:#099">777</span> data/*
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744469092298-c0641ed1-394f-41c8-8e07-01220fc9ec12.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744469092298-c0641ed1-394f-41c8-8e07-01220fc9ec12.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/2.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/2.png" />
         </a>
     </p>
 <p>一主两从集群搭建成功，三个节点如下</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471607631-5ca6a84a-f7b3-4ad4-a08b-f28b9121e120.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471607631-5ca6a84a-f7b3-4ad4-a08b-f28b9121e120.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/3.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/3.png" />
         </a>
     </p>
 <h3 id="特性验证">特性验证</h3>
@@ -309,25 +309,25 @@ docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave
 </div>
 </div><p>停掉 master 后，从节点读取正常，没法写入了</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471549023-8a1311c5-6715-4bba-b04c-697b621bc94c.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471549023-8a1311c5-6715-4bba-b04c-697b621bc94c.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/4.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/4.png" />
         </a>
     </p>
 <p>将 salve1 设置成主节点</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471954098-468dc3b0-68cf-4d5d-a5a9-2ff7bc243cd1.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471954098-468dc3b0-68cf-4d5d-a5a9-2ff7bc243cd1.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/5.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/5.png" />
         </a>
     </p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471918527-18a8e856-8793-41a4-81cd-45e6ab78d8d4.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744471918527-18a8e856-8793-41a4-81cd-45e6ab78d8d4.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/6.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/6.png" />
         </a>
     </p>
 <p>发现 slave1 读写正常，但是 salve2 没读到 salve1 的数据，这是因为 salve2 也需要i调整主节点指向</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472384898-df446ca7-3600-42ab-903c-197772293d71.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472384898-df446ca7-3600-42ab-903c-197772293d71.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/7.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/7.png" />
         </a>
     </p>
 <p>将 slave2 节点的主节点也指向 salve1</p>
@@ -340,8 +340,8 @@ docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472867249-229f1ce5-fb7c-4bad-8ee6-a84afad4629a.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744472867249-229f1ce5-fb7c-4bad-8ee6-a84afad4629a.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/8.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/8.png" />
         </a>
     </p>
 <p><strong>效果</strong>：需人工干预，服务中断时间取决于运维响应速度。</p>
@@ -354,14 +354,14 @@ docker <span style="color:#0086b3">exec</span> -it master-slave-mode-redis-slave
 </ul>
 <p>下面是客户端与哨兵集群、主从节点的主要连接过程：</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751031734179-8f1bca39-8019-4d90-b502-7e553b0f4b16.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751031734179-8f1bca39-8019-4d90-b502-7e553b0f4b16.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/1.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/1.png" />
         </a>
     </p>
 <p>哨兵集群是独立于主从数据集群的，它们负责监听主从节点的在线情况，告诉客户端可用的节点，客户端再依此动态连接到不同的节点进行读写。</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1751032735690-0a92a1b5-c060-4386-b586-8f8f72535f4b.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1751032735690-0a92a1b5-c060-4386-b586-8f8f72535f4b.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/2.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/2.png" />
         </a>
     </p>
 <h3 id="文件目录-1">文件目录</h3>
@@ -508,63 +508,42 @@ sentinel announce-hostnames yes
 </code></pre></td></tr></table>
 </div>
 </div><p>配置解释：</p>
-<ol>
-<li><code>sentinel monitor mymaster redis-master 6379 2</code></li>
-</ol>
 <ul>
-<li>
+<li><code>sentinel monitor mymaster redis-master 6379 2</code>
 <ul>
 <li>监控名为 <code>mymaster</code> 的主节点</li>
 <li>主节点地址为 <code>redis-master:6379</code>（使用 Docker 服务名）</li>
 <li><code>2</code> 表示至少需要 2 个哨兵同意才能触发故障转移</li>
 </ul>
 </li>
-</ul>
-<ol>
-<li><code>sentinel auth-pass mymaster mypassword</code></li>
-</ol>
-<ul>
-<li>
+<li><code>sentinel auth-pass mymaster mypassword</code>
 <ul>
 <li>访问受密码保护的 Redis 实例时使用的认证密码</li>
 </ul>
 </li>
-</ul>
-<ol>
-<li><code>sentinel down-after-milliseconds mymaster 5000</code></li>
-</ol>
-<ul>
-<li>
+<li><code>sentinel down-after-milliseconds mymaster 5000</code>
 <ul>
 <li>5 秒内无响应则判定节点不可用</li>
 </ul>
 </li>
-</ul>
-<ol>
-<li><code>sentinel failover-timeout mymaster 10000</code></li>
-</ol>
-<ul>
-<li>
+<li><code>sentinel failover-timeout mymaster 10000</code>
 <ul>
 <li>故障转移超时时间（10 秒）</li>
 </ul>
 </li>
-</ul>
-<ol>
-<li><code>sentinel parallel-syncs mymaster 1</code></li>
-</ol>
-<ul>
-<li>
+<li><code>sentinel parallel-syncs mymaster 1</code>
 <ul>
 <li>故障转移时同时同步的从节点数量</li>
 </ul>
 </li>
+<li><code>sentinel resolve-hostnames</code> 和 <code>sentinel announce-hostnames</code>：
+<ul>
+<li>开启域名解析，哨兵可以通过 redis-master 容器名找到 master 节点</li>
 </ul>
-<ol>
-<li><code>sentinel resolve-hostnames</code> 和 <code>sentinel announce-hostnames</code>：开启域名解析，哨兵可以通过 redis-master 容器名找到 master 节点</li>
-</ol>
+</li>
+</ul>
 <h3 id="docker-compose-配置-1">docker-compose 配置</h3>
-<p>写入下述 <code>docker-compose.yml</code><strong>配置</strong></p>
+<p>写入下述 <code>docker-compose.yml</code>配置</p>
 <div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
 <table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
 <pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
@@ -736,8 +715,8 @@ sentinel announce-hostnames yes
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744707554345-0d65dccc-726e-42f7-af40-9efd9c91f97b.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744707554345-0d65dccc-726e-42f7-af40-9efd9c91f97b.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/3.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/3.png" />
         </a>
     </p>
 <p>关停集群并删除数据</p>
@@ -999,19 +978,19 @@ docker unpause redis-master
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711688697-d449ce52-206e-49c9-9edf-7530c56cbf22.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711688697-d449ce52-206e-49c9-9edf-7530c56cbf22.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/4.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/4.png" />
         </a>
     </p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711973193-54b62d57-3a0f-4fa4-b8d6-cd34b415a7a0.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744711973193-54b62d57-3a0f-4fa4-b8d6-cd34b415a7a0.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/5.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/5.png" />
         </a>
     </p>
 <p>redis-master重新上线，变为从节点</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744712177063-a74becda-e1af-4524-b894-aab8f3525560.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744712177063-a74becda-e1af-4524-b894-aab8f3525560.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/6.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/6.png" />
         </a>
     </p>
 <h4 id="验证4持久化">验证4：持久化</h4>
@@ -1037,14 +1016,14 @@ docker <span style="color:#0086b3">exec</span> -it redis-master redis-cli -a <sp
 </div>
 </div><p>跟普通的主从模式一样，哨兵模式下的主从节点也是读写分离的，需要往主节点写数据，从节点是只读的。</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713329944-6da6302e-0280-439a-9e26-28824198e7bc.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713329944-6da6302e-0280-439a-9e26-28824198e7bc.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/7.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/7.png" />
         </a>
     </p>
 <p>重启集群后数据仍然存在</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713369663-13661cec-4946-48ff-bda0-d8527e7a7174.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744713369663-13661cec-4946-48ff-bda0-d8527e7a7174.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/sentinel/8.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/sentinel/8.png" />
         </a>
     </p>
 <h2 id="3-cluster-分片集群">3. Cluster 分片集群</h2>
@@ -1084,7 +1063,7 @@ docker <span style="color:#0086b3">exec</span> -it redis-master redis-cli -a <sp
 </code></pre></td></tr></table>
 </div>
 </div><h3 id="docker-compose-配置-2">docker-compose 配置</h3>
-<p>写入下述 <code>**docker-compose.yml**</code><strong>配置</strong></p>
+<p>写入下述 <code>docker-compose.yml</code>配置</p>
 <div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
 <table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
 <pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
@@ -1333,8 +1312,8 @@ docker <span style="color:#0086b3">exec</span> -it redis-master redis-cli -a <sp
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744786706110-cbaf603b-1917-4229-a08c-6bd2c13d5607.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744786706110-cbaf603b-1917-4229-a08c-6bd2c13d5607.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/1.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/1.png" />
         </a>
     </p>
 <p>进入任意一个节点，执行下面命令创建 Redis Cluster</p>
@@ -1483,8 +1462,8 @@ S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
 </div>
 </div><p>可以看到只有主节点有槽位分配，从节点备份主节点数据，主从关系及槽位分配如下图所示：</p>
 <p>​     
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744794924939-deab42d8-99e1-41da-b27f-3e35a47a4d3e.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744794924939-deab42d8-99e1-41da-b27f-3e35a47a4d3e.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/2.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/2.png" />
         </a>
     </p>
 <h3 id="特性验证-2">特性验证</h3>
@@ -1525,8 +1504,8 @@ efc4cade3a75e8e6e7b8f51116c1d20a52b8ad39 172.20.0.5:6379@16379 slave ae9abf26cd6
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744787516863-f39334e2-6496-48bc-82a2-e734e43dbe40.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744787516863-f39334e2-6496-48bc-82a2-e734e43dbe40.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/3.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/3.png" />
         </a>
     </p>
 <p>输出含义</p>
@@ -1595,8 +1574,8 @@ $ docker <span style="color:#0086b3">exec</span> -it redis-node-1 redis-cli -c M
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744788615401-f8d97ecd-b0f0-427a-b18c-ea858ad1fb3b.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744788615401-f8d97ecd-b0f0-427a-b18c-ea858ad1fb3b.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/4.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/4.png" />
         </a>
     </p>
 <p>2、事务（MULTI/EXEC）中断</p>
@@ -1635,8 +1614,8 @@ QUEUED
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789003603-3e3a0750-5c54-4ec7-aac7-58ef3a439694.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789003603-3e3a0750-5c54-4ec7-aac7-58ef3a439694.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/5.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/5.png" />
         </a>
     </p>
 <p>事务中的命令在预检阶段发现跨槽位操作，最后事务完全回滚，所有命令均不执行。</p>
@@ -1655,8 +1634,8 @@ $ <span style="color:#0086b3">eval</span> <span style="color:#d14">&#34;redis.ca
 </div>
 </div><p>Lua 脚本中所有操作的键必须属于同一槽位（除非使用 <code>{hash tag}</code>）</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789739013-31b6380a-9ddb-431c-accf-b45f65d3a595.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789739013-31b6380a-9ddb-431c-accf-b45f65d3a595.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/6.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/6.png" />
         </a>
     </p>
 <h4 id="验证3-槽位分布验证">验证3. 槽位分布验证</h4>
@@ -1726,8 +1705,8 @@ S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789923782-aed2b262-e0e1-435d-9d17-da573bdc821a.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744789923782-aed2b262-e0e1-435d-9d17-da573bdc821a.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/7.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/7.png" />
         </a>
     </p>
 <h4 id="验证4-主从切换测试">验证4. 主从切换测试</h4>
@@ -1769,8 +1748,8 @@ e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790578526-a59505c4-36ff-492b-9344-d97a58b0aea3.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790578526-a59505c4-36ff-492b-9344-d97a58b0aea3.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/8.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/8.png" />
         </a>
     </p>
 <p>当 redis-node-1 重新上线，将会变成 redis-node-5 的从节点</p>
@@ -1795,8 +1774,8 @@ e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790669151-fa236dec-5874-4148-ae6e-f5e44bc4b2ce.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744790669151-fa236dec-5874-4148-ae6e-f5e44bc4b2ce.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/9.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/9.png" />
         </a>
     </p>
 <h4 id="验证5-集群扩容测试">验证5. 集群扩容测试</h4>
@@ -1851,8 +1830,8 @@ redis-cli --cluster add-node 新节点IP:端口 已知节点IP:端口 <span styl
 </div>
 </div><p>采用第一种，新节点作为主节点加入集群</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792177164-4b6e2f22-b6c0-4209-ad23-4f159e31ac45.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792177164-4b6e2f22-b6c0-4209-ad23-4f159e31ac45.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/10.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/10.png" />
         </a>
     </p>
 <p>可以看到新节点没有分配槽位：</p>
@@ -1879,8 +1858,8 @@ e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792249578-b351af2b-76af-4409-84a5-4f8807af3876.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792249578-b351af2b-76af-4409-84a5-4f8807af3876.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/11.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/11.png" />
         </a>
     </p>
 <p>尝试往新节点中写数据，发现能够写入，但实际只是 MOVED 到并写入到了其他的主节点</p>
@@ -1893,8 +1872,8 @@ e18d1d38fb891a49079944c3ece1589ad39cdb9f 172.20.0.6:6379@16379 myself,master - <
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792726446-a0b826ca-b23c-42db-9a3c-786a7fdfa83a.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744792726446-a0b826ca-b23c-42db-9a3c-786a7fdfa83a.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/12.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/12.png" />
         </a>
     </p>
 <p><strong>分配槽位</strong></p>
@@ -2141,28 +2120,28 @@ S: 7923a2a719e020a5729d3abb0789eb1464018f5b 172.20.0.7:6379
 </code></pre></td></tr></table>
 </div>
 </div><p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744793948547-59e25cf8-4177-47f7-bd31-3809f1f1488f.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744793948547-59e25cf8-4177-47f7-bd31-3809f1f1488f.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/13.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/13.png" />
         </a>
     </p>
 <p>目前的节点关系和槽位分配如下图所示：</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744795854234-07ec670c-ffb7-4a70-a1e9-527bb7dd7983.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744795854234-07ec670c-ffb7-4a70-a1e9-527bb7dd7983.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/cluster/14.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/cluster/14.png" />
         </a>
     </p>
 <h1 id="三遇到的问题">三、遇到的问题</h1>
 <h3 id="行内注释导致集群启动失败">行内注释导致集群启动失败</h3>
 <p>构建集群后发现容器没启动成功</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701221183-6d40427f-403e-472f-a76c-15b4d8dda96b.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701221183-6d40427f-403e-472f-a76c-15b4d8dda96b.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/pro/1.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/pro/1.png" />
         </a>
     </p>
 <p>通过查看容器日志发现可能是行内注释导致的，</p>
 <p>
-        <a data-fancybox="gallery" href="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701278473-a176ae9f-57f3-4b72-9af7-90b2ede52995.png">
-            <img class="mx-auto" alt="img" src="https://cdn.nlark.com/yuque/0/2025/png/185100/1744701278473-a176ae9f-57f3-4b72-9af7-90b2ede52995.png" />
+        <a data-fancybox="gallery" href="/images/redis_cluster/pro/2.png">
+            <img class="mx-auto" alt="img" src="/images/redis_cluster/pro/2.png" />
         </a>
     </p>
 <p>Redis 配置文件 <strong>严格不支持行内注释</strong>，所有以 <code>#</code> 开头的注释必须独占一行。配置文件中出现了类似这样的错误写法：</p>
